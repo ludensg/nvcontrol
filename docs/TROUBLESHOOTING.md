@@ -44,7 +44,8 @@ Fan *curves* need a daemon. Install LACT (`sudo pacman -S lact`, then `sudo syst
 
 ## Digital Vibrance on Wayland
 * Install nVibrant: `pipx install nvibrant`. It must match your driver version; update it after driver updates.
-* NV//CONTROL detects every GPU port and applies the value to all of them. If a monitor still doesn't change, check the nVibrant output in the log (it lists each port).
+* Each monitor has its own slider. NV//CONTROL detects every GPU port, shows the connected ones, and guesses the KDE name (e.g. Port 2 · DP → DP-2). Press **IDENTIFY** to turn that monitor grey for 2 s if you're unsure which is which.
+* The ALL slider sets every monitor at once. *Re-apply at login* stores each monitor's value.
 
 ## Display change left me with a black screen
 Wait 15 s. The previous mode comes back automatically unless you press KEEP.

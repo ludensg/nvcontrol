@@ -120,7 +120,7 @@ def mock_system() -> SystemInfo:
                    nvidia_icd=True, nvidia_drm_modeset=True, nvidia_drm_fbdev=True,
                    helper_installed=True, pkexec=True, lactd_active=True)
     have = {"nvidia-utils", "nvml-py", "lact", "nvidia-settings", "mangohud", "steam",
-            "vulkan-tools", "kscreen", "gamescope"}
+            "vulkan-tools", "kscreen", "gamescope", "nvibrant"}
     s.tools = {t.id: ToolState(t, t.id in have, f"/usr/bin/{t.binaries[0]}" if t.binaries and t.id in have else None)
                for t in TOOLS}
     m1 = disp.Mode("1", 2560, 1440, 164.96)

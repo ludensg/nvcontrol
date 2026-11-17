@@ -195,8 +195,51 @@ VIBRANCE_MIN, VIBRANCE_MAX = -1024, 1023
 
 
 MAX_CONNECTORS = 16
-# nvibrant prints one line per physical connector, e.g. "• (2, DP  )  Set Vibrance (  512)  Success"
-_CONNECTOR_RE = re.compile(r"\(\s*(\d+)\s*,\s*[A-Za-z][A-Za-z0-9 _-]*\)")
+# nvibrant prints one line per *physical* GPU port, connected or not:
+#   "• (1, DP  ) • Set Vibrance (  100) • Success"   <- connected
+#   "• (2, DP  ) • Set Vibrance (    0) • None"      <- nothing plugged in
+# Values are matched to ports by index; ports without a value are reset to 0.
+_PORT_RE = re.compile(r"\(\s*(\d+)\s*,\s*([A-Za-z][A-Za-z0-9_-]*)\s*\).*?\(\s*(-?\d+)\s*\).*?(Success|None|\w+)\s*$")
+_KIND_TO_DRM = {"DP": "DP", "HDMI": "HDMI-A", "DVI": "DVI-D", "VGA": "VGA", "EDP": "eDP", "USB-C": "DP"}
+
+
+@dataclass
+class VibrancePort:
+    index: int
+    kind: str
+    connected: bool
+    value: int = 0
+    guess: str | None = None    # likely KDE / DRM output name, e.g. "DP-2"
+
+    @property
+    def label(self) -> str:
+        return f"Port {self.index} · {self.kind}"
+
+
+def parse_nvibrant(output: str) -> list[VibrancePort]:
+    ports: dict[int, VibrancePort] = {}
+    for line in output.splitlines():
+        m = _PORT_RE.search(line)
+        if m:
+            idx = int(m.group(1))
+            ports.setdefault(idx, VibrancePort(idx, m.group(2).upper(), m.group(4) == "Success",
+                                               int(m.group(3))))
+    return [ports[k] for k in sorted(ports)]
+
+
+def guess_output_names(ports: list[VibrancePort], output_names: list[str]) -> None:
+    """Best-effort match of physical ports to KDE/DRM names.
+
+    nvidia-drm numbers connectors per type in physical order (counting empty ports),
+    so the 2nd DP port is usually "DP-2". Only set when that name really exists.
+    The UI always offers an IDENTIFY button because this is a heuristic.
+    """
+    have = set(output_names)
+    rank: dict[str, int] = {}
+    for p in ports:
+        rank[p.kind] = rank.get(p.kind, 0) + 1
+        name = f"{_KIND_TO_DRM.get(p.kind, p.kind)}-{rank[p.kind]}"
+        p.guess = name if (p.connected and name in have) else None
 
 
 def nvibrant_set(values: list[int]) -> runner.Result:
@@ -208,25 +251,42 @@ def nvibrant_set(values: list[int]) -> runner.Result:
     return r
 
 
+def vector(values: dict[int, int], nports: int) -> list[int]:
+    n = max(nports, (max(values) + 1) if values else 1)
+    return [int(values.get(i, 0)) for i in range(n)]
+
+
+def nvibrant_apply(values: dict[int, int], nports: int = 0) -> tuple[runner.Result, list[VibrancePort]]:
+    """Apply per-port values (port index -> value). Returns the ports nvibrant reported."""
+    r = nvibrant_set(vector(values, nports))
+    ports = parse_nvibrant(r.out + r.err)
+    if r.ok and ports and len(ports) > max(nports, len(values)):
+        # First run discovered more ports than we sent values for: resend full vector
+        r = nvibrant_set(vector(values, len(ports)))
+        ports = parse_nvibrant(r.out + r.err) or ports
+    return r, ports
+
+
 def nvibrant_connector_count(output: str) -> int:
-    """Number of physical connectors nvibrant reported (highest index + 1, all GPUs)."""
-    ids = [int(m) for m in _CONNECTOR_RE.findall(output)]
-    return max(ids) + 1 if ids else 0
+    ports = parse_nvibrant(output)
+    return len(ports)
 
 
 def nvibrant_set_all(value: int) -> tuple[runner.Result, int]:
-    """Apply one vibrance value to EVERY physical connector.
+    r, ports = nvibrant_apply({0: value})
+    if ports:
+        r, ports = nvibrant_apply({p.index: value for p in ports}, len(ports))
+    return r, max(1, len(ports))
 
-    nvibrant assigns values by connector index in driver order, and connectors without a
-    value keep the default. Monitors on later ports (e.g. DP-3 while DP-0/1/2 are empty)
-    were therefore left unchanged. We probe once, count the connectors, then send a value
-    for every one of them.
-    """
-    first = nvibrant_set([value])
-    n = nvibrant_connector_count(first.out + first.err)
-    if not first.ok or n <= 1:
-        return first, max(n, 1)
-    return nvibrant_set([value] * n), n
+
+def mock_nvibrant_output(values: list[int]) -> str:
+    kinds = ["HDMI", "DP", "DP", "DP"]
+    connected = {0, 1}
+    lines = ["Display 0:"]
+    for i, k in enumerate(kinds):
+        v = values[i] if i < len(values) else 0
+        lines.append(f"• ({i}, {k:<4}) • Set Vibrance ({v:>5}) • {'Success' if i in connected else 'None'}")
+    return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------- DDC/CI

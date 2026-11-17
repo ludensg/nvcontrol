@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import shlex
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -9,9 +8,9 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QF
                                QHBoxLayout, QLineEdit, QSlider, QSpinBox)
 
 from ...core import runner
-from ...core.config import atomic_write
 from ...integrations import display as D
 from ..async_util import run_async
+from ..vibrance_panel import VibrancePanel
 from ..widgets import CountdownDialog, HudPanel, button, label
 from .base import Page
 
@@ -86,28 +85,10 @@ class DisplayPage(Page):
         self.lay.addWidget(op)
 
         grid = self.grid(2)
-        # ---------------- vibrance
-        self.vp = HudPanel("Digital Vibrance", "SATURATION · DRIVER-NATIVE")
-        self.vib = QSlider(Qt.Horizontal)
-        self.vib.setRange(D.VIBRANCE_MIN, D.VIBRANCE_MAX)
-        self.vib_val = label("0", "Mono")
-        self.vib.valueChanged.connect(lambda v: self.vib_val.setText(f"{v:+d}  ({(v + 1024) / 20.47:.0f} %)"))
-        vr = QHBoxLayout()
-        vr.addWidget(self.vib, 1)
-        vr.addWidget(self.vib_val)
-        self.vp.add(vr)
-        cr = QHBoxLayout()
-        self.vib_n = label("Applies to every monitor (all GPU ports are detected automatically)", "Faint")
-        cr.addWidget(self.vib_n)
-        self.vib_login = QCheckBox("Re-apply at login")
-        cr.addWidget(self.vib_login)
-        cr.addStretch(1)
-        self.vib_btn = button("APPLY VIBRANCE", None, self._apply_vibrance)
-        cr.addWidget(self.vib_btn)
-        self.vp.add(cr)
-        self.vib_status = QHBoxLayout()
-        self.vp.add(self.vib_status)
-        grid.addWidget(self.vp, 0, 0)
+        # ---------------- vibrance (per monitor)
+        self.vp = VibrancePanel(ctx, main, lambda: self.outputs)
+        self.vib_detected = False
+        self.lay.addWidget(self.vp)
 
         # ---------------- DDC
         self.dp = HudPanel("Monitor controls (DDC/CI)", "REAL BACKLIGHT")
@@ -135,7 +116,7 @@ class DisplayPage(Page):
         self.dp.add(dr2)
         self.ddc_status = QHBoxLayout()
         self.dp.add(self.ddc_status)
-        grid.addWidget(self.dp, 0, 1)
+        grid.addWidget(self.dp, 0, 0)
 
         # ---------------- color
         cp = HudPanel("Color temperature · Gamma", "COLOR")
@@ -147,7 +128,7 @@ class DisplayPage(Page):
         cb.addWidget(button("NVIDIA SETTINGS", None, lambda: runner.launch_detached(["nvidia-settings"])))
         cb.addStretch(1)
         cp.add(cb)
-        grid.addWidget(cp, 1, 0, 1, 2)
+        grid.addWidget(cp, 0, 1)
         self.lay.addLayout(grid)
         self.lay.addStretch(1)
         self.outputs: list[D.Output] = []
@@ -188,12 +169,7 @@ class DisplayPage(Page):
             self.out_status.addWidget(label("No outputs detected (kscreen-doctor / xrandr unavailable).", "Warn"))
 
         vf = f("vibrance")
-        self.vib_btn.setEnabled(bool(vf and vf.status.name == "OPERATIONAL"))
-        self.vib.setEnabled(self.vib_btn.isEnabled())
-        self.vib_n.setVisible(s.is_wayland)
-        self.vib_login.setEnabled(self.vib_btn.isEnabled())
-        self._clear(self.vib_status)
-        self.vib_status.addLayout(self.status_row(vf))
+        self.vp.update_feature(vf, self.status_row(vf))
 
         df = f("ddc")
         dok = bool(df and df.status.name == "OPERATIONAL")
@@ -230,10 +206,6 @@ class DisplayPage(Page):
         self.icc.setText(o.icc_profile or "")
         self.posx.setValue(o.pos[0])
         self.posy.setValue(o.pos[1])
-        if self.ctx.sysinfo.is_x11 and self.ctx.sysinfo.has("nvidia-settings"):
-            v = D.nvsettings_query("DigitalVibrance", o.name)
-            if v is not None:
-                self.vib.setValue(v)
 
     def _refresh(self):
         def job():
@@ -307,34 +279,11 @@ class DisplayPage(Page):
                 self.main.toast("Display settings reverted")
         self._refresh()
 
-    def _apply_vibrance(self):
-        v = self.vib.value()
-        if self.ctx.mock:
-            log.info("[mock] vibrance %d", v)
-            self.main.toast(f"[mock] vibrance {v}")
-            return
-        s = self.ctx.sysinfo
-        if s.is_x11:
-            errs = [r.err for o in self.outputs if not (r := D.nvsettings_assign("DigitalVibrance", v, o.name)).ok]
-            if errs:
-                self.error("Vibrance failed", "\n".join(errs))
-            return
-        r, n = D.nvibrant_set_all(v)
-        vals = [v] * n
-        if not r.ok:
-            self.error("nVibrant failed", r.err or r.out)
-            return
-        self.vib_n.setText(f"Applied to all {n} GPU port(s)")
-        self.main.toast(f"Vibrance {v:+d} applied to all {n} GPU ports")
-        auto = Path.home() / ".config" / "autostart" / "nvcontrol-vibrance.desktop"
-        if self.vib_login.isChecked():
-            exe = runner.which("nvibrant") or "nvibrant"
-            atomic_write(auto, "[Desktop Entry]\nType=Application\nName=NV//CONTROL vibrance\n"
-                               f"Exec={shlex.quote(exe)} {' '.join(str(x) for x in vals)}\n"
-                               "X-KDE-autostart-phase=2\nNoDisplay=true\n")
-            self.main.toast(f"Vibrance will be re-applied at login ({auto})")
-        elif auto.exists():
-            auto.unlink()
+    def on_show(self):
+        vf = self.ctx.feature("vibrance")
+        if not self.vib_detected and vf and vf.status.name == "OPERATIONAL":
+            self.vib_detected = True
+            self.vp.detect()
 
     def _ddc_detect(self):
         self.ddc_detect.setEnabled(False)

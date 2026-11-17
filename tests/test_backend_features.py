@@ -64,7 +64,11 @@ def test_helper_missing_means_needs_config():
 
 
 def test_wayland_vibrance_requires_nvibrant():
-    m = matrix()
+    assert matrix()["vibrance"].status == Status.OPERATIONAL       # mock system has nvibrant
+    b = MockBackend()
+    s = mock_system()
+    s.tools["nvibrant"].installed = False
+    m = {f.id: f for f in build_matrix(s, b.gpus()[0], b.tuning_caps(0), b.name)}
     assert m["vibrance"].status == Status.NEEDS_CONFIG
     assert m["gamma"].status == Status.UNSUPPORTED
 
@@ -105,16 +109,30 @@ def test_only_repo_tools_autoinstall():
             assert not t.installable
 
 
-def test_nvibrant_connector_parsing_and_apply_all(monkeypatch):
+def test_nvibrant_parse_and_guess_names():
+    from nvcontrol.integrations import display as D
+    out = ("Display 0:\n• (0, HDMI) • Set Vibrance (  512) • Success\n"
+           "• (1, DP  ) • Set Vibrance (    0) • None\n• (2, DP  ) • Set Vibrance ( 1023) • Success\n"
+           "• (3, DP  ) • Set Vibrance (    0) • None\n")
+    ports = D.parse_nvibrant(out)
+    assert [(p.index, p.kind, p.connected, p.value) for p in ports] == [
+        (0, "HDMI", True, 512), (1, "DP", False, 0), (2, "DP", True, 1023), (3, "DP", False, 0)]
+    D.guess_output_names(ports, ["HDMI-A-1", "DP-2"])
+    assert ports[0].guess == "HDMI-A-1" and ports[2].guess == "DP-2" and ports[1].guess is None
+    assert D.parse_nvibrant("garbage") == []
+
+
+def test_nvibrant_independent_values_per_port(monkeypatch):
     from nvcontrol.core import runner
     from nvcontrol.integrations import display as D
-    out = ("Display 0:\n• (0, HDMI)  Set Vibrance (  512)  Success\n"
-           "• (1, DP  )  Set Vibrance (    0)  Success\n• (2, DP  )  Set Vibrance (    0)  Success\n"
-           "• (3, DP  )  Set Vibrance (    0)  Success\n")
-    assert D.nvibrant_connector_count(out) == 4
-    assert D.nvibrant_connector_count("garbage") == 0
     calls = []
-    monkeypatch.setattr(runner, "run", lambda argv, **k: calls.append(argv) or runner.Result(True, 0, out, ""))
-    r, n = D.nvibrant_set_all(512)
-    assert r.ok and n == 4
-    assert calls[-1] == ["nvibrant", "512", "512", "512", "512"]   # every port, not just the first
+
+    def fake(argv, **k):
+        calls.append(argv)
+        return runner.Result(True, 0, D.mock_nvibrant_output([int(x) for x in argv[1:]]), "")
+    monkeypatch.setattr(runner, "run", fake)
+    r, ports = D.nvibrant_apply({0: 300, 2: -200})
+    assert r.ok and len(ports) == 4
+    assert calls[-1] == ["nvibrant", "300", "0", "-200", "0"]       # each port its own value
+    assert {p.index: p.value for p in ports} == {0: 300, 1: 0, 2: -200, 3: 0}
+    assert D.vector({5: 9}, 2) == [0, 0, 0, 0, 0, 9]
