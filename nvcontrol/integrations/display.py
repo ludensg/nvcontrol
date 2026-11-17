@@ -9,10 +9,13 @@ Important distinctions surfaced in the UI:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 
 from ..core import runner
+
+log = logging.getLogger(__name__)
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
 VRR_POLICIES = {0: "never", 1: "always", 2: "automatic"}
@@ -191,11 +194,39 @@ def nvsettings_assign(attr: str, value: int, target: str | None = None) -> runne
 VIBRANCE_MIN, VIBRANCE_MAX = -1024, 1023
 
 
+MAX_CONNECTORS = 16
+# nvibrant prints one line per physical connector, e.g. "• (2, DP  )  Set Vibrance (  512)  Success"
+_CONNECTOR_RE = re.compile(r"\(\s*(\d+)\s*,\s*[A-Za-z][A-Za-z0-9 _-]*\)")
+
+
 def nvibrant_set(values: list[int]) -> runner.Result:
-    vals = [str(max(VIBRANCE_MIN, min(VIBRANCE_MAX, int(v)))) for v in values][:8]
+    vals = [str(max(VIBRANCE_MIN, min(VIBRANCE_MAX, int(v)))) for v in values][:MAX_CONNECTORS]
     if not vals:
         return runner.Result(False, 2, "", "no values")
-    return runner.run(["nvibrant", *vals], timeout=10)
+    r = runner.run(["nvibrant", *vals], timeout=10)
+    log.info("nvibrant %s -> exit %d\n%s%s", " ".join(vals), r.code, r.out, r.err)
+    return r
+
+
+def nvibrant_connector_count(output: str) -> int:
+    """Number of physical connectors nvibrant reported (highest index + 1, all GPUs)."""
+    ids = [int(m) for m in _CONNECTOR_RE.findall(output)]
+    return max(ids) + 1 if ids else 0
+
+
+def nvibrant_set_all(value: int) -> tuple[runner.Result, int]:
+    """Apply one vibrance value to EVERY physical connector.
+
+    nvibrant assigns values by connector index in driver order, and connectors without a
+    value keep the default. Monitors on later ports (e.g. DP-3 while DP-0/1/2 are empty)
+    were therefore left unchanged. We probe once, count the connectors, then send a value
+    for every one of them.
+    """
+    first = nvibrant_set([value])
+    n = nvibrant_connector_count(first.out + first.err)
+    if not first.ok or n <= 1:
+        return first, max(n, 1)
+    return nvibrant_set([value] * n), n
 
 
 # ---------------------------------------------------------------- DDC/CI

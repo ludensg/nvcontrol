@@ -97,7 +97,7 @@ of every page plus Veneco Mode.
 * **Per-game GPU tuning profiles** are not switched automatically. Tuning is global; the profile field is a reminder. LACT can auto-switch its own profiles by process.
 * **Multi-GPU**: telemetry/tuning use the first NVIDIA GPU (`selected_gpu` in settings.json). There's no GPU picker UI yet.
 * **Non-Steam launchers** (Lutris, Heroic): the launch-option preview can be copied, but they aren't written automatically.
-* **Digital Vibrance on Wayland** depends on nVibrant (not in official repos). The connector order is the driver's, not KDE's.
+* **Digital Vibrance on Wayland** depends on nVibrant (not in official repos). The value is applied to every GPU port automatically.
 * **Gamma / contrast on Wayland**: no driver or KWin API. Use ICC profiles or DDC/CI.
 * **Windows-only**: DSR/DLDSR, RTX HDR, RTX Video Super Resolution, ShadowPlay, Freestyle, driver-level NIS, Low Latency Mode, Ansel. Alternatives are shown in the matrix.
 * **Hardware-tested?** It was developed and tested against mocks. Real-hardware paths use documented NVML and nvidia-smi calls, but expect to report the first rough edges via the bug report.

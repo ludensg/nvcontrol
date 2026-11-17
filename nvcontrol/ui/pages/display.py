@@ -97,11 +97,7 @@ class DisplayPage(Page):
         vr.addWidget(self.vib_val)
         self.vp.add(vr)
         cr = QHBoxLayout()
-        cr.addWidget(label("CONNECTORS", "Kicker"))
-        self.vib_n = QSpinBox()
-        self.vib_n.setRange(1, 8)
-        self.vib_n.setValue(max(1, len(ctx.sysinfo.displays)))
-        self.vib_n.setToolTip("nVibrant sets values per physical NVIDIA connector, in driver order (not KDE order).")
+        self.vib_n = label("Applies to every monitor (all GPU ports are detected automatically)", "Faint")
         cr.addWidget(self.vib_n)
         self.vib_login = QCheckBox("Re-apply at login")
         cr.addWidget(self.vib_login)
@@ -323,12 +319,13 @@ class DisplayPage(Page):
             if errs:
                 self.error("Vibrance failed", "\n".join(errs))
             return
-        vals = [v] * self.vib_n.value()
-        r = D.nvibrant_set(vals)
+        r, n = D.nvibrant_set_all(v)
+        vals = [v] * n
         if not r.ok:
             self.error("nVibrant failed", r.err or r.out)
             return
-        self.main.toast("Vibrance applied")
+        self.vib_n.setText(f"Applied to all {n} GPU port(s)")
+        self.main.toast(f"Vibrance {v:+d} applied to all {n} GPU ports")
         auto = Path.home() / ".config" / "autostart" / "nvcontrol-vibrance.desktop"
         if self.vib_login.isChecked():
             exe = runner.which("nvibrant") or "nvibrant"

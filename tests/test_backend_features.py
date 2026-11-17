@@ -103,3 +103,18 @@ def test_only_repo_tools_autoinstall():
     for t in TOOLS:
         if t.repo in ("aur", "pypi"):
             assert not t.installable
+
+
+def test_nvibrant_connector_parsing_and_apply_all(monkeypatch):
+    from nvcontrol.core import runner
+    from nvcontrol.integrations import display as D
+    out = ("Display 0:\n• (0, HDMI)  Set Vibrance (  512)  Success\n"
+           "• (1, DP  )  Set Vibrance (    0)  Success\n• (2, DP  )  Set Vibrance (    0)  Success\n"
+           "• (3, DP  )  Set Vibrance (    0)  Success\n")
+    assert D.nvibrant_connector_count(out) == 4
+    assert D.nvibrant_connector_count("garbage") == 0
+    calls = []
+    monkeypatch.setattr(runner, "run", lambda argv, **k: calls.append(argv) or runner.Result(True, 0, out, ""))
+    r, n = D.nvibrant_set_all(512)
+    assert r.ok and n == 4
+    assert calls[-1] == ["nvibrant", "512", "512", "512", "512"]   # every port, not just the first
