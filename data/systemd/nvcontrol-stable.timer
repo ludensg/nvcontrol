@@ -1,0 +1,9 @@
+[Unit]
+Description=NV//CONTROL — mark boot stable after 3 minutes
+
+[Timer]
+OnBootSec=3min
+Unit=nvcontrol-stable.service
+
+[Install]
+WantedBy=timers.target

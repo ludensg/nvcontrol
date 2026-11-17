@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=NV//CONTROL
+GenericName=NVIDIA Control Center
+Comment=GPU telemetry, tuning, display and per-game RTX settings
+Exec=nvcontrol
+Icon=nvcontrol
+Terminal=false
+Categories=System;Settings;HardwareSettings;Game;
+Keywords=nvidia;gpu;geforce;rtx;dlss;overclock;fan;proton;steam;mangohud;
+StartupWMClass=nvcontrol
+Actions=Diagnostics;Mock;
+
+[Desktop Action Diagnostics]
+Name=Run setup wizard
+Exec=nvcontrol --wizard
+
+[Desktop Action Mock]
+Name=Demo mode (simulated GPU)
+Exec=nvcontrol --mock

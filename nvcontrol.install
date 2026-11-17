@@ -1,0 +1,14 @@
+post_install() {
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  echo ":: NV//CONTROL installed. Startup tuning service (only acts if you save a startup profile):"
+  echo "     sudo systemctl enable nvcontrol-apply.service nvcontrol-stable.timer"
+  echo ":: Logs: ~/.local/state/nvcontrol/logs/nvcontrol.log and /var/log/nvcontrol-helper.log"
+}
+
+post_upgrade() {
+  systemctl daemon-reload >/dev/null 2>&1 || true
+}
+
+pre_remove() {
+  systemctl disable --now nvcontrol-apply.service nvcontrol-stable.timer >/dev/null 2>&1 || true
+}

@@ -1,0 +1,6 @@
+[Unit]
+Description=NV//CONTROL — mark this boot as stable (crash-loop protection for startup tuning)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nvcontrol/nvcontrol-helper mark-stable

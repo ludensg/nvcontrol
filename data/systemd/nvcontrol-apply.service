@@ -1,0 +1,15 @@
+[Unit]
+Description=NV//CONTROL — apply saved GPU tuning at boot
+Documentation=file:///usr/share/doc/nvcontrol/TROUBLESHOOTING.md
+After=systemd-modules-load.service nvidia-persistenced.service
+ConditionPathExists=/etc/nvcontrol/tuning.json
+
+[Service]
+Type=oneshot
+# Initialise the driver first so NVML is ready
+ExecStartPre=-/usr/bin/nvidia-smi -L
+ExecStart=/usr/lib/nvcontrol/nvcontrol-helper apply-startup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
