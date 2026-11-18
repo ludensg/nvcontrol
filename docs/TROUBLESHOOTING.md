@@ -47,6 +47,14 @@ Fan *curves* need a daemon. Install LACT (`sudo pacman -S lact`, then `sudo syst
 * Each monitor has its own slider. NV//CONTROL detects every GPU port, shows the connected ones, and guesses the KDE name (e.g. Port 2 · DP → DP-2). Press **IDENTIFY** to turn that monitor grey for 2 s if you're unsure which is which.
 * The ALL slider sets every monitor at once. *Re-apply at login* stores each monitor's value.
 
+## Brightness is low / stuck after sleep or hibernate
+NV//CONTROL detects resume and, about 4 s later, puts each monitor's compositor brightness back to the value
+you set (or the value it had before sleeping) and re-applies per-monitor vibrance, which the driver resets to 0.
+Turn this off with *Restore brightness & vibrance after sleep / hibernate* on the Display page.
+The brightness slider now applies as soon as you release it, and always sends the value, even if the app's
+cached reading was stale. If it's still stuck: `kscreen-doctor -o` shows what KWin thinks, and the log shows a
+`resume:` line for every value restored. Also check that KDE's own power settings (*Dim automatically*) aren't fighting it.
+
 ## Display change left me with a black screen
 Wait 15 s. The previous mode comes back automatically unless you press KEEP.
 Otherwise switch to a TTY (Ctrl+Alt+F3) and run `kscreen-doctor -o` and `kscreen-doctor output.DP-1.mode.<id>`.

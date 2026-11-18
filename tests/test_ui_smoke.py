@@ -45,3 +45,42 @@ def test_wizard_builds(app):
     for i in range(5):
         wz._go(i)
     wz.close()
+
+
+def test_output_selection_survives_refresh_and_resume(app, monkeypatch):
+    from nvcontrol.ui.context import AppContext
+    from nvcontrol.ui.main_window import MainWindow, ResumeWatcher
+    ctx = AppContext(mock=True)
+    ctx.detect_system()
+    w = MainWindow(ctx)
+    page = w.pages[2]
+    page.out.setCurrentIndex(1)
+    name = page._cur().name
+    page.on_caps()                                  # what APPLY OUTPUT triggers via refresh
+    assert page._cur().name == name                 # bug 1: selection no longer jumps back
+    # bug 2: after resume, a dimmed output is put back to the remembered brightness
+    page._remember_brightness("DP-1", 80)
+    ctx.sysinfo.displays[0].brightness = 20         # what KDE came back with
+    sent = []
+    monkeypatch.setattr(page, "_set", lambda n, prop, v: sent.append((n, prop, v)))
+    from nvcontrol.ui import async_util
+    monkeypatch.setattr(async_util, "run_async", lambda fn, cb: cb(fn(), None))
+    import nvcontrol.ui.pages.display as dmod
+    monkeypatch.setattr(dmod, "run_async", lambda fn, cb: cb(fn(), None))
+    page.on_resume()
+    assert ("DP-1", "brightness", "80") in sent
+    # watcher detects a sleep gap
+    rw = ResumeWatcher(w)
+    got = []
+    rw.resumed.connect(got.append)
+    rw.offset -= 120
+    rw._tick()
+    assert got and got[0] >= 119
+    w.close()
+
+
+def test_kscreen_brightness_parsing():
+    from nvcontrol.integrations.display import _brightness_pct
+    assert _brightness_pct(1.0) == 100 and _brightness_pct(1) == 100
+    assert _brightness_pct(0.35) == 35 and _brightness_pct(70) == 70
+    assert _brightness_pct(None) is None

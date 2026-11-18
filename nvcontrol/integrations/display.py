@@ -88,10 +88,18 @@ def parse_kscreen_json(text: str) -> list[Output]:
             vrr_policy=VRR_POLICIES.get(o.get("vrrPolicy")) if "vrrPolicy" in o else None,
             hdr=o.get("hdr") if "hdr" in o else None,
             icc_profile=o.get("iccProfilePath") or None,
-            brightness=int(round(b * 100)) if isinstance(b, float) and b <= 1.0 else (int(b) if b is not None else None),
+            brightness=_brightness_pct(b),
             capabilities=o.get("capabilities"),
         ))
     return outs
+
+
+def _brightness_pct(b) -> int | None:
+    """kscreen reports brightness as a 0..1 fraction (some versions as 0..100)."""
+    if isinstance(b, bool) or not isinstance(b, (int, float)):
+        return None
+    v = b * 100 if b <= 1 else b
+    return max(0, min(100, int(round(v))))
 
 
 def kscreen_outputs() -> list[Output]:

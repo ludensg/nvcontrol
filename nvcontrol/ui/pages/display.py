@@ -50,6 +50,8 @@ class DisplayPage(Page):
         self.hdr = QCheckBox("HDR output")
         self.bright = QSlider(Qt.Horizontal)
         self.bright.setRange(0, 100)
+        self.bright.setToolTip("Applied when you release the slider.")
+        self.bright.sliderReleased.connect(self._apply_brightness)
         self.icc = QLineEdit()
         self.icc.setPlaceholderText("/path/to/profile.icc (empty = none)")
         self.posx, self.posy = QSpinBox(), QSpinBox()
@@ -76,6 +78,10 @@ class DisplayPage(Page):
         op.add(label("Compositor brightness dims the image in KWin (works for SDR and HDR); it does not change "
                      "the monitor backlight. Use DDC/CI below for real monitor luminance.", "Faint", wrap=True))
         ar = QHBoxLayout()
+        self.restore_sleep = QCheckBox("Restore brightness && vibrance after sleep / hibernate")
+        self.restore_sleep.setChecked(ctx.settings.extra.get("restore_after_sleep", True))
+        self.restore_sleep.toggled.connect(self._save_restore_pref)
+        ar.addWidget(self.restore_sleep)
         ar.addStretch(1)
         self.apply_btn = button("APPLY OUTPUT", "Primary", self._apply_output)
         ar.addWidget(self.apply_btn)
@@ -146,11 +152,14 @@ class DisplayPage(Page):
     def on_caps(self):
         f = self.ctx.feature
         s = self.ctx.sysinfo
+        prev = self._cur().name if self._cur() else None
         self.outputs = list(s.displays)
         self.out.blockSignals(True)
         self.out.clear()
         for o in self.outputs:
             self.out.addItem(f"{o.name}  ·  {o.current_mode.label if o.current_mode else '?'}")
+        keep = next((i for i, o in enumerate(self.outputs) if o.name == prev), 0)
+        self.out.setCurrentIndex(keep)
         self.out.blockSignals(False)
         self._load_output()
         res = f("resolution")
@@ -249,8 +258,10 @@ class DisplayPage(Page):
                 ops.append(("vrrpolicy", self.vrr.currentText()))
             if o.hdr is not None and self.hdr.isChecked() != bool(o.hdr):
                 ops.append(("hdr", "enable" if self.hdr.isChecked() else "disable"))
-            if o.brightness is not None and self.bright.value() != o.brightness:
+            if o.brightness is not None:
+                # always send: the cached value may be stale (KDE dimming, resume from sleep)
                 ops.append(("brightness", str(self.bright.value())))
+                self._remember_brightness(o.name, self.bright.value())
             icc = self.icc.text().strip()
             if icc != (o.icc_profile or "") and icc:
                 ops.append(("iccprofile", icc))
@@ -278,6 +289,70 @@ class DisplayPage(Page):
                     D.xrandr_set_mode(o.name, old_mode)
                 self.main.toast("Display settings reverted")
         self._refresh()
+
+    # ---------------------------------------------------------- brightness / resume
+    def _save_restore_pref(self, on):
+        self.ctx.settings.extra["restore_after_sleep"] = bool(on)
+        self.ctx.settings.save()
+
+    def _remember_brightness(self, name: str, value: int):
+        self.ctx.settings.extra.setdefault("brightness", {})[name] = int(value)
+        self.ctx.settings.save()
+
+    def _apply_brightness(self):
+        o = self._cur()
+        if not o or not self.ctx.sysinfo.is_kde:
+            return
+        v = self.bright.value()
+        self._remember_brightness(o.name, v)
+        name = o.name
+
+        def done(err, exc):
+            if exc or err:
+                self.error("Brightness", str(exc or err))
+            else:
+                o.brightness = v
+                self.main.toast(f"{name} compositor brightness {v} %")
+        run_async(lambda: self._set(name, "brightness", str(v)), done)
+
+    def on_resume(self):
+        """Called after sleep/hibernate. KWin and the NVIDIA driver can come back with a different
+        brightness and with vibrance reset to 0; put back what the user had."""
+        if not self.restore_sleep.isChecked():
+            log.info("resume: restore disabled")
+            return
+        before = {o.name: o.brightness for o in self.outputs if o.brightness is not None}
+        wanted = dict(before)
+        wanted.update(self.ctx.settings.extra.get("brightness", {}))
+        kde = self.ctx.sysinfo.is_kde
+        mock = self.ctx.mock
+
+        def job():
+            outs = self.ctx.sysinfo.displays if mock else (D.kscreen_outputs() if kde else D.xrandr_outputs())
+            fixed = []
+            if kde:
+                for o in outs:
+                    want = wanted.get(o.name)
+                    if want is not None and o.brightness != want:
+                        log.info("resume: %s brightness %s -> %s", o.name, o.brightness, want)
+                        if self._set(o.name, "brightness", str(want)) is None:
+                            o.brightness = want
+                            fixed.append(f"{o.name} {want}%")
+            return outs, fixed
+
+        def done(res, exc):
+            if exc:
+                log.error("resume restore failed: %s", exc)
+                return
+            outs, fixed = res
+            if outs:
+                self.ctx.sysinfo.displays = outs
+            self.on_caps()
+            if self.vp.rows:
+                self.vp.apply()
+            self.ddc.clear()          # i2c buses can be renumbered after resume; re-detect when needed
+            self.main.toast("Restored after sleep: " + (", ".join(fixed) if fixed else "vibrance"))
+        run_async(job, done)
 
     def on_show(self):
         vf = self.ctx.feature("vibrance")

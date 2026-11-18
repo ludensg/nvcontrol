@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
 
-from PySide6.QtCore import QByteArray, QEasingCurve, QPointF, QPropertyAnimation, QTimer
+from PySide6.QtCore import QByteArray, QEasingCurve, QObject, QPointF, QPropertyAnimation, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPainter, QPen, QPolygonF, QShortcut
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
                                QMainWindow, QMessageBox, QStackedWidget, QStatusBar, QVBoxLayout, QWidget)
@@ -25,6 +26,36 @@ from .widgets import ScanlineOverlay, button, label
 
 log = logging.getLogger("nvcontrol.ui")
 PAGES = [DashboardPage, TuningPage, DisplayPage, RtxPage, ProfilesPage, PerformancePage, ToolsPage, SettingsPage]
+
+
+class ResumeWatcher(QObject):
+    """Detects resume from suspend/hibernate without D-Bus.
+
+    CLOCK_BOOTTIME keeps counting while the machine sleeps, CLOCK_MONOTONIC doesn't:
+    when their difference grows, the system was asleep for that long.
+    """
+    resumed = Signal(float)
+
+    def __init__(self, parent, interval_ms: int = 3000):
+        super().__init__(parent)
+        self.offset = self._offset()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._tick)
+        self.timer.start(interval_ms)
+
+    @staticmethod
+    def _offset() -> float:
+        try:
+            return time.clock_gettime(time.CLOCK_BOOTTIME) - time.monotonic()
+        except (AttributeError, OSError):
+            return 0.0
+
+    def _tick(self):
+        now = self._offset()
+        slept = now - self.offset
+        self.offset = now
+        if slept > 5:
+            self.resumed.emit(slept)
 
 
 class Wordmark(QWidget):
@@ -143,6 +174,8 @@ class MainWindow(QMainWindow):
         self.telemetry.sample.connect(self._on_sample)
         self.telemetry.start()
         QShortcut(QKeySequence("Ctrl+Alt+V"), self, activated=self.toggle_veneco)
+        self.resume = ResumeWatcher(self)
+        self.resume.resumed.connect(self._on_resume)
         logs.on_crash(self._crash_dialog)
 
         self.nav_buttons[0].setChecked(True)
@@ -234,6 +267,20 @@ class MainWindow(QMainWindow):
                 p.on_caps()
             except Exception:  # noqa: BLE001
                 log.exception("page %s failed to refresh", type(p).__name__)
+
+    def _on_resume(self, slept: float):
+        log.info("system resumed after %.0f s asleep", slept)
+        # give KWin and the driver a moment to bring the outputs back
+        QTimer.singleShot(4000, self._after_resume)
+
+    def _after_resume(self):
+        for p in self.pages:
+            fn = getattr(p, "on_resume", None)
+            if fn:
+                try:
+                    fn()
+                except Exception:  # noqa: BLE001
+                    log.exception("on_resume failed in %s", type(p).__name__)
 
     def redetect(self):
         from .async_util import run_async
