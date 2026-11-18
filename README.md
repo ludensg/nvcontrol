@@ -43,12 +43,23 @@ Then start **NV//CONTROL** from the application menu or run `nvcontrol`.
 Try it without touching hardware: `nvcontrol --mock` (simulated RTX 4080 SUPER and a fake Steam library,
 using a separate config folder).
 
+### Updating
+
+Updating no longer needs `git pull`. Any of these works:
+* In the app: **SETTINGS ▸ Updates ▸ UPDATE NOW**. NV//CONTROL checks GitHub at startup and shows **⬆ UPDATE AVAILABLE** in the status bar when there's a new version.
+* App menu: right-click NV//CONTROL ▸ **Update NV//CONTROL**
+* Terminal: `nvcontrol --update` (or `bash ~/nvcontrol/update.sh`)
+
+The updater opens a terminal (it needs your sudo password to reinstall), lists the new changes, pulls them,
+rebuilds the package and tells you to restart the app. Log: `~/.local/state/nvcontrol/logs/update.log`.
+
 ### Command line
 ```
 nvcontrol                 normal start
 nvcontrol --mock          demo mode (simulated GPU + Steam)
 nvcontrol --verbose       debug logging, also to the terminal
 nvcontrol --wizard        re-run the setup wizard
+nvcontrol --update        update from GitHub and reinstall
 nvcontrol --diagnostics   print the system/feature report
 nvcontrol --bug-report    report + recent logs (paste this when asking for help)
 ```

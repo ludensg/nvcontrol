@@ -26,6 +26,7 @@ def parse_args(argv=None):
     ap.add_argument("--wizard", action="store_true", help="run the setup wizard again")
     ap.add_argument("--diagnostics", action="store_true", help="print a diagnostic report and exit")
     ap.add_argument("--bug-report", action="store_true", help="print diagnostics + recent logs and exit")
+    ap.add_argument("--update", action="store_true", help="pull the latest version from GitHub and reinstall")
     ap.add_argument("--veneco", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
     return ap.parse_args(argv)
@@ -44,6 +45,10 @@ def main(argv=None) -> int:
               file=sys.stderr)
         log.error("refused to start as root")
         return 1
+
+    if args.update:
+        from .core import updater
+        return updater.run_in_this_terminal()
 
     if args.diagnostics or args.bug_report:
         from PySide6.QtCore import QCoreApplication

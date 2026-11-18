@@ -166,6 +166,9 @@ class MainWindow(QMainWindow):
 
         self.setStatusBar(QStatusBar())
         self.status_poll = QLabel()
+        self.update_btn = button("⬆ UPDATE AVAILABLE", "Primary", lambda: self.show_page(len(PAGES) - 1))
+        self.update_btn.hide()
+        self.statusBar().addPermanentWidget(self.update_btn)
         self.statusBar().addPermanentWidget(self.status_poll)
 
         # ---- wiring
@@ -183,6 +186,8 @@ class MainWindow(QMainWindow):
         self._on_caps()
         if ctx.settings.window_geometry:
             self.restoreGeometry(QByteArray.fromBase64(ctx.settings.window_geometry.encode()))
+        if ctx.settings.check_updates and not ctx.mock:
+            QTimer.singleShot(5000, lambda: self.pages[-1].check_updates(quiet=True))
         if ctx.settings.veneco_mode:
             QTimer.singleShot(300, lambda: self._set_veneco(True, intro=False))
 
@@ -281,6 +286,11 @@ class MainWindow(QMainWindow):
                     fn()
                 except Exception:  # noqa: BLE001
                     log.exception("on_resume failed in %s", type(p).__name__)
+
+    def update_available(self, st):
+        self.update_btn.setText(f"⬆ UPDATE AVAILABLE ({st.latest or st.behind})")
+        self.update_btn.show()
+        self.toast(f"NV//CONTROL update available: {st.behind} change(s). Settings ▸ Updates.", 10000)
 
     def redetect(self):
         from .async_util import run_async

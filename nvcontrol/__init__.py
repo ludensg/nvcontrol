@@ -3,7 +3,7 @@
 ONE SYSTEM. TOTAL CONTROL.
 """
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 APP_NAME = "NV//CONTROL"
 APP_ID = "nvcontrol"
 TAGLINE = "ONE SYSTEM. TOTAL CONTROL."

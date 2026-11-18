@@ -105,6 +105,7 @@ class Settings:
     startup_profile: str = ""
     selected_gpu: int = 0
     window_geometry: str = ""
+    check_updates: bool = True
     extra: dict = field(default_factory=dict)
 
     @classmethod

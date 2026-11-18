@@ -6,6 +6,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# --update / --yes: non-interactive (used by update.sh); skips the optional questions
+UPDATE=0
+for arg in "$@"; do case "$arg" in --update|--yes|-y) UPDATE=1 ;; esac; done
 LOGDIR="${XDG_STATE_HOME:-$HOME/.local/state}/nvcontrol/logs"
 mkdir -p "$LOGDIR"
 LOG="$LOGDIR/install.log"
@@ -39,6 +42,18 @@ run makepkg -sif --noconfirm
 say "Enabling startup-tuning services (they do nothing until you save a startup profile):"
 run sudo systemctl daemon-reload
 run sudo systemctl enable nvcontrol-apply.service nvcontrol-stable.timer
+
+# Remember where the source lives so the app's updater can find it
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}/nvcontrol"
+mkdir -p "$CFG"
+echo "$HERE" > "$CFG/source_dir"
+say "Updater source folder recorded: $HERE"
+
+if (( UPDATE )); then
+  say "Update installed. Restart NV//CONTROL to use the new version."
+  say "Install log: $LOG"
+  exit 0
+fi
 
 if systemctl list-unit-files nvidia-persistenced.service >/dev/null 2>&1; then
   if ! systemctl is-enabled --quiet nvidia-persistenced 2>/dev/null; then

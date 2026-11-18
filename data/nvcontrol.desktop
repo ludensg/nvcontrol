@@ -9,7 +9,11 @@ Terminal=false
 Categories=System;Settings;HardwareSettings;Game;
 Keywords=nvidia;gpu;geforce;rtx;dlss;overclock;fan;proton;steam;mangohud;
 StartupWMClass=nvcontrol
-Actions=Diagnostics;Mock;
+Actions=Update;Diagnostics;Mock;
+
+[Desktop Action Update]
+Name=Update NV//CONTROL
+Exec=nvcontrol --update
 
 [Desktop Action Diagnostics]
 Name=Run setup wizard

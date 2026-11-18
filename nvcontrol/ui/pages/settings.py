@@ -8,9 +8,10 @@ from PySide6.QtWidgets import (QCheckBox, QFileDialog, QFormLayout, QHBoxLayout,
                                QSpinBox)
 
 from ... import TAGLINE, __version__
-from ...core import logs, runner
+from ...core import logs, runner, updater
 from ...core.config import atomic_write, config_dir, data_dir
 from ...core.report import build_report
+from ..async_util import run_async
 from ..widgets import HudPanel, button, label
 from .base import Page
 
@@ -76,6 +77,31 @@ class SettingsPage(Page):
         grid.addWidget(wp, 1, 1)
         self.lay.addLayout(grid)
 
+        up = HudPanel("Updates", "GITHUB")
+        self.up_status = label(f"Installed: {__version__}", "H3", wrap=True)
+        up.add(self.up_status)
+        self.up_log = label("", "Mono", wrap=True)
+        up.add(self.up_log)
+        ur = QHBoxLayout()
+        self.up_check = button("CHECK FOR UPDATES", None, self.check_updates)
+        self.up_run = button("UPDATE NOW", "Primary", self._run_update,
+                             "Opens a terminal: pulls from GitHub and reinstalls (asks for your password).")
+        self.up_run.setEnabled(False)
+        self.up_force = button("REINSTALL", None, lambda: self._run_update(force=True),
+                               "Rebuild and reinstall the current version.")
+        self.up_auto = QCheckBox("Check at startup")
+        self.up_auto.setChecked(s.check_updates)
+        self.up_auto.toggled.connect(self._save)
+        for w in (self.up_check, self.up_run, self.up_force, self.up_auto):
+            ur.addWidget(w)
+        ur.addStretch(1)
+        up.add(ur)
+        src = updater.source_dir()
+        self.up_src = label(f"Source folder: {src}" if src else "Source folder: not found (install from a git "
+                            "clone with install.sh to enable updates)", "Faint", wrap=True)
+        up.add(self.up_src)
+        self.lay.addWidget(up)
+
         lp = HudPanel("Logs & bug reports", "SUPPORT")
         lp.add(label("If something fails, press COPY BUG REPORT and paste it into a chat or issue — it contains "
                      "diagnostics plus the latest log lines (no passwords or personal files).", "Muted", wrap=True))
@@ -132,8 +158,46 @@ class SettingsPage(Page):
             atomic_write(p, self._report())
             self.main.toast(f"Saved {p}")
 
+    # ------------------------------------------------------------- updates
+    def check_updates(self, quiet: bool = False):
+        self.up_check.setEnabled(False)
+        self.up_status.setText("Checking GitHub…")
+
+        def done(st, exc):
+            self.up_check.setEnabled(True)
+            if exc or st is None:
+                st = updater.UpdateStatus(False, error=str(exc))
+            self.show_update_status(st)
+            if st.available:
+                self.main.update_available(st)
+        run_async(updater.check, done)
+
+    def show_update_status(self, st):
+        if not st.ok:
+            self.up_status.setText(f"Installed: {__version__} · update check failed")
+            self.up_log.setText(st.error)
+            self.up_run.setEnabled(False)
+            self.up_force.setEnabled(st.source is not None)
+            return
+        if st.available:
+            ver = f"{st.latest}" if st.latest and st.latest != st.current else "new changes"
+            self.up_status.setText(f"UPDATE AVAILABLE · installed {st.current} → {ver} ({st.behind} change(s))")
+            self.up_log.setText("\n".join(st.commits))
+        else:
+            self.up_status.setText(f"Up to date · {st.current}")
+            self.up_log.setText("")
+        self.up_run.setEnabled(st.available)
+
+    def _run_update(self, force: bool = False):
+        ok, msg = updater.launch_update(force=force)
+        if ok:
+            self.main.toast("Updater opened in a terminal. Restart NV//CONTROL when it finishes.", 15000)
+        else:
+            self.error("Update", msg)
+
     def _save(self):
         s = self.ctx.settings
+        s.check_updates = self.up_auto.isChecked()
         s.animations = self.anim.isChecked()
         s.scanlines = self.scan.isChecked()
         s.graph_seconds = self.graph.value()

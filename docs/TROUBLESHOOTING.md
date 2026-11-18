@@ -73,6 +73,13 @@ Enable **Show DLSS indicator** in the profile to see which DLSS version/preset i
 ## MangoHud shows nothing
 Use the `mangohud` wrapper (the profile does this), or `--mangoapp` inside Gamescope (also automatic). 32-bit games need `lib32-mangohud`.
 
+## Updates
+* "Source folder not found": the app finds the git clone through `~/.config/nvcontrol/source_dir`, which install.sh writes. Run `bash install.sh` once from the clone, or clone to `~/nvcontrol`.
+* "Could not reach GitHub": offline, or the repo is private and git isn't logged in (`gh auth login`).
+* "Could not fast-forward": run `cd ~/nvcontrol && git reset --hard @{u} && bash update.sh`.
+* Nothing happens on UPDATE NOW: no supported terminal was found. Run `bash ~/nvcontrol/update.sh` yourself.
+* Log: `~/.local/state/nvcontrol/logs/update.log`
+
 ## Running from source / without installing
 ```
 python -m nvcontrol --mock      # simulated GPU, isolated config
