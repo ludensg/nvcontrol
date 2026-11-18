@@ -54,9 +54,8 @@ class DiffDialog(QDialog):
 
 class ProfilesPage(Page):
     nav_key = "nav.profiles"
-    kicker = "// 05 · PER-GAME CONFIGURATION"
-    subtitle = ("Build Steam launch options visually. Nothing is written to Steam until you press WRITE TO STEAM "
-                "and confirm; Steam must be closed.")
+    kicker = "· PER GAME"
+    subtitle = "Launch options for each Steam game. Nothing is written until you press Write to Steam."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)

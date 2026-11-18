@@ -26,9 +26,8 @@ HOWTO = {
 
 class RtxPage(Page):
     nav_key = "nav.rtx"
-    kicker = "// 04 · RTX FEATURE STACK"
-    subtitle = ("Who controls each feature on Linux: the game, Proton (DXVK-NVAPI) or the driver. "
-                "Nothing here is a system-wide switch unless it says so.")
+    kicker = "· RTX FEATURES"
+    subtitle = "What controls each RTX feature on Linux, and how to turn it on."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)

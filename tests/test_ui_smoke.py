@@ -111,3 +111,19 @@ def test_global_graphics_and_lab_pages(app, monkeypatch):
     lab._refresh_sensors()
     assert lab.sens.rowCount() > 5
     w.close()
+
+
+def test_sentence_case_keeps_acronyms():
+    from nvcontrol.ui.text import sentence_case
+    assert sentence_case("SAVE AS STARTUP PROFILE") == "Save as startup profile"
+    assert sentence_case("OPEN LACT · FAN CURVES") == "Open LACT · fan curves"
+    assert sentence_case("SCAN STEAM LIBRARY") == "Scan Steam library"
+    assert sentence_case("TEST 20 s") == "TEST 20 s"            # mixed case is left alone
+    assert sentence_case("Already Fine") == "Already Fine"
+
+
+def test_bundled_fonts_load(app):
+    from nvcontrol.ui import theme
+    theme.init_fonts()
+    assert theme.FONTS["head"] == "Barlow Semi Condensed"
+    assert theme.FONTS["body"] == "Inter" and theme.FONTS["mono"] == "JetBrains Mono"

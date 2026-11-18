@@ -124,5 +124,7 @@ of every page plus Veneco Mode.
 
 ---
 
+Fonts: Barlow Semi Condensed, Inter and JetBrains Mono are bundled under the SIL Open Font License (`nvcontrol/ui/fonts`).
+
 *Not affiliated with NVIDIA. NVIDIA, GeForce, RTX, DLSS, G-SYNC and Reflex are trademarks of NVIDIA Corporation.*
 *Pressing Ctrl+Alt+V is at your own risk (it's cosmetic, the GPU doesn't care).*

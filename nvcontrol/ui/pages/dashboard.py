@@ -15,8 +15,8 @@ INTERVALS = [("250 ms", 250), ("500 ms", 500), ("1 s", 1000), ("2 s", 2000), ("5
 
 class DashboardPage(Page):
     nav_key = "nav.command"
-    kicker = "// 01 · LIVE TELEMETRY"
-    subtitle = "Real-time GPU state straight from the NVIDIA driver."
+    kicker = "· LIVE TELEMETRY"
+    subtitle = "Live readings from the NVIDIA driver."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)
@@ -45,7 +45,7 @@ class DashboardPage(Page):
         gl = QHBoxLayout()
         self.g_temp = RadialGauge(L("temp"), "°C", 100, warn=80, crit=88)
         self.g_load = RadialGauge(L("load"), "%", 100)
-        self.g_power = RadialGauge(L("power"), "W", 300, warn=None)
+        self.g_power = RadialGauge(L("power_draw"), "W", 300, warn=None)
         self.g_fan = RadialGauge(L("fan"), "%", 100)
         for g in (self.g_temp, self.g_load, self.g_power, self.g_fan):
             g.animate = ctx.settings.animations
@@ -95,7 +95,7 @@ class DashboardPage(Page):
 
     def retranslate(self):
         super().retranslate()
-        for g, k in ((self.g_temp, "temp"), (self.g_load, "load"), (self.g_power, "power"), (self.g_fan, "fan")):
+        for g, k in ((self.g_temp, "temp"), (self.g_load, "load"), (self.g_power, "power_draw"), (self.g_fan, "fan")):
             g.title = L(k)
             g.update()
         for t, k in ((self.t_core, "core"), (self.t_mem, "mem"), (self.t_vram, "vram"), (self.t_pl, "power")):
@@ -109,7 +109,7 @@ class DashboardPage(Page):
             self.ident_line.setText(self.ctx.backend.source + " — check that the nvidia driver is loaded "
                                     "(lsmod | grep nvidia) and nvidia-utils is installed.")
             return
-        self.gpu_name.setText(g.name.upper())
+        self.gpu_name.setText(g.name)
         vram = f"{g.vram_total_mb / 1024:.0f} GB" if g.vram_total_mb else "?"
         mod = {True: "open kernel module", False: "proprietary kernel module"}.get(g.open_kernel_module, "?")
         self.ident_line.setText(

@@ -22,7 +22,7 @@ PRESET_LABELS = {"app": "Use the 3D application setting", "render_preset_latest"
 
 # (title, attribute, kind, options, mechanism)
 SECTIONS = [
-    ("DLSS & RTX  ·  PROTON GAMES", [
+    ("DLSS & RTX  ·  Proton games", [
         ("DLSS Override — Model presets (Super Resolution)", "dlss_sr_preset", "combo", G.DLSS_PRESETS,
          "DXVK-NVAPI driver setting"),
         ("DLSS Override — Model presets (Ray Reconstruction)", "dlss_rr_preset", "combo", G.DLSS_PRESETS,
@@ -36,14 +36,14 @@ SECTIONS = [
         ("DLSS on-screen indicator", "dlss_indicator", "bool", None, "DXVK-NVAPI NGX debug options"),
         ("Smooth Motion", "smooth_motion", "smooth", None, "NVPRESENT_ENABLE_SMOOTH_MOTION · all Vulkan apps"),
     ]),
-    ("LATENCY · SYNC · FRAME RATE", [
+    ("Latency, sync & frame rate", [
         ("Low latency mode", "low_latency", "combo", ["off", "on", "ultra"],
-         "OpenGL __GL_MaxFramesAllowed + DXVK maxFrameLatency"),
+         "1-frame queue · Ultra adds an auto FPS cap from your refresh rate"),
         ("Vertical sync", "vsync", "combo", ["app", "off", "on"], "OpenGL __GL_SYNC_TO_VBLANK + DXVK syncInterval"),
         ("Max frame rate", "max_fps", "fps", None, "DXVK maxFrameRate + VKD3D_FRAME_RATE (Direct3D games)"),
         ("Triple buffering", "triple_buffering", "combo", ["app", "off", "on"], "DXVK numBackBuffers"),
     ]),
-    ("IMAGE QUALITY", [
+    ("Image quality", [
         ("Anisotropic filtering", "anisotropic", "combo", ["app", "off", "2x", "4x", "8x", "16x"],
          "OpenGL __GL_LOG_MAX_ANISO + DXVK samplerAnisotropy"),
         ("Texture filtering — Negative LOD bias", "negative_lod", "combo", ["allow", "clamp"],
@@ -55,7 +55,7 @@ SECTIONS = [
     ]),
 ]
 
-NICE = {"app": "Use the 3D application setting", "off": "Off", "on": "On", "ultra": "Ultra", "auto": "Auto",
+NICE = {"app": "Use the 3D application setting", "off": "Off", "on": "On", "ultra": "Ultra (On + auto FPS cap)", "auto": "Auto",
         "allow": "Allow", "clamp": "Clamp", "default": "Driver default", "10gb": "10 GB", "100gb": "100 GB",
         "unlimited": "Unlimited", "dlaa": "DLAA", "custom": "Custom render scale", "2x": "2x", "4x": "4x",
         "8x": "8x", "16x": "16x", "3x": "3x"}
@@ -81,11 +81,8 @@ WINDOWS_ONLY = [
 
 class GlobalGraphicsPage(Page):
     nav_key = "nav.global"
-    kicker = "// 05 · NVIDIA APP ▸ GLOBAL SETTINGS"
-    subtitle = ("The NVIDIA App's global driver settings, one row each. On Linux they become a session "
-                "environment file and a DXVK config that apply to every game started after your next login. "
-                "Game Profiles still override them per game. Rows that don't exist on Linux are listed at the "
-                "bottom with the closest alternative.")
+    kicker = "· DRIVER SETTINGS"
+    subtitle = "The NVIDIA App's global settings, translated for Linux. Applies to every game after your next login."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)
@@ -93,7 +90,7 @@ class GlobalGraphicsPage(Page):
         self.widgets: dict[str, QWidget] = {}
         self.rows_status: dict[str, StatusBadge] = {}
         for title, rows in SECTIONS:
-            p = HudPanel(title, "DRIVER SETTINGS")
+            p = HudPanel(title)
             grid = QGridLayout()
             grid.setColumnStretch(0, 1)
             grid.setHorizontalSpacing(14)
@@ -104,7 +101,7 @@ class GlobalGraphicsPage(Page):
             self.lay.addWidget(p)
 
         # immediate (non-environment) rows
-        ip = HudPanel("Applied immediately", "HARDWARE · DISPLAY")
+        ip = HudPanel("Applied immediately")
         grid = QGridLayout()
         grid.setColumnStretch(0, 1)
         self.pm = QComboBox()
@@ -123,7 +120,7 @@ class GlobalGraphicsPage(Page):
         self.lay.addWidget(ip)
 
         # preview + apply
-        ap = HudPanel("Apply globally", "COMMIT")
+        ap = HudPanel("Apply globally")
         self.notes = label("", "Warn", wrap=True)
         ap.add(self.notes)
         self.preview = QPlainTextEdit()
@@ -142,7 +139,7 @@ class GlobalGraphicsPage(Page):
         ap.add(r)
         self.lay.addWidget(ap)
 
-        wp = HudPanel("Not available on Linux", "WINDOWS-ONLY · ALTERNATIVES")
+        wp = HudPanel("Not available on Linux")
         grid = QGridLayout()
         grid.setColumnStretch(1, 1)
         for i, (name, alt) in enumerate(WINDOWS_ONLY):
@@ -238,6 +235,10 @@ class GlobalGraphicsPage(Page):
                 setattr(g, attr, v if w.isEnabled() else "app")
         return g
 
+    def _refresh_hz(self) -> float | None:
+        rates = [o.current_mode.refresh for o in self.ctx.sysinfo.displays if o.enabled and o.current_mode]
+        return max(rates) if rates else None
+
     def _flags(self) -> tuple[bool, bool, bool]:
         sm = self.ctx.feature("smooth_motion")
         gpu = self.ctx.gpu
@@ -281,7 +282,7 @@ class GlobalGraphicsPage(Page):
     def _changed(self, *_):
         g = self._collect()
         sm_ok, mfg_ok, _ = self._flags()
-        env, dx, notes = G.build(g, sm_ok, mfg_ok)
+        env, dx, notes = G.build(g, sm_ok, mfg_ok, self._refresh_hz())
         txt = f"# {G.env_path()}\n" + (G.render_env(env) if env else "(not written: nothing set)\n")
         txt += f"\n# {G.dxvk_path()}\n" + (G.render_dxvk(dx) if dx else "(not written: nothing set)\n")
         self.preview.setPlainText(txt)
@@ -299,7 +300,7 @@ class GlobalGraphicsPage(Page):
     def _apply(self):
         g = self._collect()
         sm_ok, mfg_ok, _ = self._flags()
-        env, dx, notes = G.build(g, sm_ok, mfg_ok)
+        env, dx, notes = G.build(g, sm_ok, mfg_ok, self._refresh_hz())
         if g.smooth_motion and sm_ok and not self.confirm(
                 "Global Smooth Motion", "Smooth Motion will apply to every Vulkan application, not only games. "
                 "Enable it globally anyway?"):

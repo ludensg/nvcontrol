@@ -96,7 +96,7 @@ class Settings:
     poll_interval_ms: int = 1000
     graph_seconds: int = 120
     animations: bool = True
-    scanlines: bool = True
+    scanlines: bool = False
     veneco_mode: bool = False
     sound_muted: bool = True          # never autoplay audio
     sound_volume: int = 30            # percent

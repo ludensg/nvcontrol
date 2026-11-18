@@ -18,8 +18,8 @@ from .base import Page
 
 class SettingsPage(Page):
     nav_key = "nav.settings"
-    kicker = "// 08 · APPLICATION"
-    subtitle = "Interface, monitoring, logs and the things nobody asked for."
+    kicker = "· APPLICATION"
+    subtitle = "Interface, updates, logs and a certain button."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)
@@ -30,6 +30,8 @@ class SettingsPage(Page):
         f = QFormLayout()
         self.anim = QCheckBox("Animations (gauges, transitions)")
         self.anim.setChecked(s.animations)
+        self.texture = QCheckBox("Background texture (grain, dot grid)")
+        self.texture.setChecked(s.extra.get("texture", True))
         self.scan = QCheckBox("CRT scanlines")
         self.scan.setChecked(s.scanlines)
         self.graph = QSpinBox()
@@ -37,10 +39,11 @@ class SettingsPage(Page):
         self.graph.setSuffix(" s")
         self.graph.setValue(s.graph_seconds)
         f.addRow("", self.anim)
+        f.addRow("", self.texture)
         f.addRow("", self.scan)
         f.addRow("Graph history", self.graph)
         ip.add(f)
-        for w in (self.anim, self.scan):
+        for w in (self.anim, self.texture, self.scan):
             w.toggled.connect(self._save)
         self.graph.valueChanged.connect(self._save)
         grid.addWidget(ip, 0, 0)
@@ -200,6 +203,7 @@ class SettingsPage(Page):
         s.check_updates = self.up_auto.isChecked()
         s.animations = self.anim.isChecked()
         s.scanlines = self.scan.isChecked()
+        s.extra["texture"] = self.texture.isChecked()
         s.graph_seconds = self.graph.value()
         s.sound_muted = self.mute.isChecked()
         s.sound_volume = self.vol.value()

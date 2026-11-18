@@ -54,9 +54,8 @@ class SliderSpin:
 
 class TuningPage(Page):
     nav_key = "nav.tuning"
-    kicker = "// 02 · HARDWARE CONTROL"
-    subtitle = ("Driver-enforced limits only. Changes go through the audited root helper (polkit). "
-                "TEST applies for 20 seconds and reverts unless you confirm.")
+    kicker = "· HARDWARE CONTROL"
+    subtitle = "Power, clocks and fans, within the driver's limits. Test runs for 20 seconds, then reverts unless you keep it."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)

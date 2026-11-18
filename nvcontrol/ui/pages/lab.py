@@ -19,10 +19,8 @@ log = logging.getLogger("nvcontrol.lab")
 
 class LabPage(Page):
     nav_key = "nav.lab"
-    kicker = "// 03 · EVERY KNOB THE DRIVER EXPOSES"
-    subtitle = ("Advanced controls for this exact card: temperature target, memory clock locking, per-fan "
-                "control, a real fan-curve service, persistence mode and deep sensors. Values are limited to "
-                "what the driver reports. Unsupported controls are disabled and say why.")
+    kicker = "· ADVANCED"
+    subtitle = "Every control the driver exposes for this card."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)

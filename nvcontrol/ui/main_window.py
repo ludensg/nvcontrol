@@ -5,8 +5,8 @@ import time
 
 from PySide6.QtCore import QByteArray, QEasingCurve, QObject, QPointF, QPropertyAnimation, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPainter, QPen, QPolygonF, QShortcut
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
-                               QMainWindow, QMessageBox, QStackedWidget, QStatusBar, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMainWindow,
+                               QMessageBox, QPushButton, QStackedWidget, QStatusBar, QVBoxLayout, QWidget)
 
 from .. import APP_NAME, TAGLINE
 from ..core import logs
@@ -24,7 +24,9 @@ from .pages.settings import SettingsPage
 from .pages.tools import ToolsPage
 from .pages.tuning import TuningPage
 from .veneco import KeygenDialog, Sounds, VenecoBanner, VenecoIntro
-from .widgets import ScanlineOverlay, button, label
+from .chrome import NavRail, TopBar
+from .text import sentence_case
+from .widgets import Backdrop, Clock, ScanlineOverlay, button, label
 
 log = logging.getLogger("nvcontrol.ui")
 PAGES = [DashboardPage, TuningPage, LabPage, DisplayPage, GlobalGraphicsPage, RtxPage, ProfilesPage,
@@ -61,36 +63,6 @@ class ResumeWatcher(QObject):
             self.resumed.emit(slept)
 
 
-class Wordmark(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setFixedSize(236, 56)
-
-    def paintEvent(self, e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        # emblem: chamfered square with slash
-        p.setPen(QPen(theme.qc("accent"), 2))
-        x, y, s = 4, 12, 30
-        p.drawPolygon(QPolygonF([QPointF(x, y), QPointF(x + s - 8, y), QPointF(x + s, y + 8),
-                                 QPointF(x + s, y + s), QPointF(x + 8, y + s), QPointF(x, y + s - 8)]))
-        p.drawLine(QPointF(x + 9, y + s - 7), QPointF(x + s - 9, y + 7))
-        p.drawLine(QPointF(x + 15, y + s - 7), QPointF(x + s - 3, y + 11))
-        p.setFont(theme.font("head", 17, True, 1.5))
-        p.setPen(theme.qc("text"))
-        p.drawText(44, 34, "NV")
-        w = p.fontMetrics().horizontalAdvance("NV")
-        p.setPen(theme.qc("accent"))
-        p.drawText(44 + w, 34, "//")
-        w2 = p.fontMetrics().horizontalAdvance("//")
-        p.setPen(theme.qc("text"))
-        p.drawText(44 + w + w2, 34, "CONTROL")
-        p.setFont(theme.font("mono", 6, spacing=1.2))
-        p.setPen(theme.qc("muted"))
-        p.drawText(45, 47, TAGLINE)
-        p.end()
-
-
 class MainWindow(QMainWindow):
     def __init__(self, ctx: AppContext):
         super().__init__()
@@ -113,58 +85,33 @@ class MainWindow(QMainWindow):
         outer.addWidget(self.banner)
 
         # ---- top bar
-        top = QWidget()
-        top.setFixedHeight(64)
-        top.setObjectName("TopBar")
-        tl = QHBoxLayout(top)
-        tl.setContentsMargins(16, 4, 20, 4)
-        tl.addWidget(Wordmark())
-        tl.addStretch(1)
-        self.top_gpu = label("", "H3")
-        self.top_drv = QLabel()
-        self.top_sess = QLabel()
-        tl.addWidget(self.top_gpu)
-        tl.addSpacing(16)
-        tl.addWidget(self.top_drv)
-        tl.addSpacing(8)
-        tl.addWidget(self.top_sess)
-        outer.addWidget(top)
-        self.topbar = top
+        self.topbar = TopBar()
+        outer.addWidget(self.topbar)
 
         body = QHBoxLayout()
         body.setSpacing(0)
         outer.addLayout(body, 1)
 
         # ---- nav rail
-        rail = QWidget()
-        rail.setFixedWidth(250)
-        rail.setObjectName("Rail")
-        rl = QVBoxLayout(rail)
-        rl.setContentsMargins(0, 18, 0, 14)
-        rl.setSpacing(2)
-        self.nav = QButtonGroup(self)
-        self.nav_buttons = []
-        for i, cls in enumerate(PAGES):
-            b = button(f"{i + 1:02d}  {L(cls.nav_key)}", "Nav")
-            b.setCheckable(True)
-            self.nav.addButton(b, i)
-            self.nav_buttons.append(b)
-            rl.addWidget(b)
-        self.nav.idClicked.connect(self.show_page)
-        rl.addStretch(1)
+        self.rail = NavRail([L(cls.nav_key) for cls in PAGES])
+        self.rail.selected.connect(self.show_page)
+        self.nav_buttons = self.rail.buttons
         self.rail_status = label("", "Faint", wrap=True)
-        self.rail_status.setContentsMargins(16, 0, 12, 0)
-        rl.addWidget(self.rail_status)
-        body.addWidget(rail)
-        self.rail = rail
+        self.rail_status.setContentsMargins(22, 0, 14, 0)
+        self.rail.footer(self.rail_status)
+        body.addWidget(self.rail)
 
-        # ---- workspace
+        # ---- workspace (textured backdrop behind the pages)
+        self.backdrop = Backdrop()
+        bl = QVBoxLayout(self.backdrop)
+        bl.setContentsMargins(0, 0, 0, 0)
         self.stack = QStackedWidget()
         self.stack.setObjectName("Workspace")
-        body.addWidget(self.stack, 1)
+        bl.addWidget(self.stack)
+        body.addWidget(self.backdrop, 1)
         self.pages = [cls(ctx, self) for cls in PAGES]
         for i, p in enumerate(self.pages):
-            p.k.setText(f"// {i + 1:02d} · {p.kicker.split('·', 1)[-1].strip()}")
+            p.k.setText(f"{i + 1:02d}  ·  {p.kicker.split('·', 1)[-1].strip()}")
             self.stack.addWidget(p)
         self.scan = ScanlineOverlay(self.stack)
 
@@ -185,7 +132,7 @@ class MainWindow(QMainWindow):
         self.resume.resumed.connect(self._on_resume)
         logs.on_crash(self._crash_dialog)
 
-        self.nav_buttons[0].setChecked(True)
+        self.rail.set_current(0)
         self.apply_ui_settings()
         self._on_caps()
         if ctx.settings.window_geometry:
@@ -205,39 +152,45 @@ class MainWindow(QMainWindow):
 
     def apply_ui_settings(self):
         s = self.ctx.settings
-        self.scan.set_active(s.scanlines, s.animations)
+        Clock.get().set_running(s.animations)
+        self.rail.animate = s.animations
+        self.backdrop.textured = s.extra.get("texture", True)
+        self.scan.set_active(s.scanlines)
+        self.backdrop.update()
         for p in self.pages:
             for g in getattr(p, "__dict__", {}).values():
                 if hasattr(g, "animate"):
                     g.animate = s.animations
-        self.status_poll.setText(f"POLL {s.poll_interval_ms} ms · {self.ctx.backend.name.upper()}"
-                                 + (" · SIMULATED HARDWARE" if self.ctx.mock else ""))
+        self.status_poll.setText(f"poll {s.poll_interval_ms} ms  ·  {self.ctx.backend.name}"
+                                 + ("  ·  simulated hardware" if self.ctx.mock else ""))
 
     def restyle(self):
         QApplication.instance().setStyleSheet(theme.stylesheet())
-        self.topbar.setStyleSheet(f"#TopBar {{ background: {theme.C['bg2']}; border-bottom: 1px solid {theme.C['border']}; }}")
-        self.rail.setStyleSheet(f"#Rail {{ background: {theme.C['bg2']}; border-right: 1px solid {theme.C['border']}; }}")
+        for b in self.findChildren(QPushButton):
+            orig = b.property("orig_text")
+            if orig:
+                b.setText(orig if theme.is_veneco() else sentence_case(orig))
+        from PySide6.QtWidgets import QTabWidget
+        for tw in self.findChildren(QTabWidget):
+            for i in range(tw.count()):
+                orig = tw.tabBar().tabData(i) or tw.tabText(i)
+                tw.tabBar().setTabData(i, orig)
+                tw.setTabText(i, orig if theme.is_veneco() else sentence_case(orig))
         self._chips()
         for w in self.findChildren(QWidget):
             w.update()
 
     def _chips(self):
         g = self.ctx.gpu
-        ok = theme.C["accent"]
-        bad = theme.C["crit"]
-        mono = theme.FONTS.get("mono")
-        chip = "border:1px solid {c}; color:{c}; padding:3px 8px; font-family:'%s'; font-size:8pt; letter-spacing:1px;" % mono
-        self.top_drv.setText(f"DRIVER {g.driver_version}" if g else "NO DRIVER")
-        self.top_drv.setStyleSheet(chip.format(c=ok if g else bad))
         s = self.ctx.sysinfo
-        self.top_sess.setText(f"{(s.session or '?').upper()} · {(s.desktop or '?').upper()}")
-        self.top_sess.setStyleSheet(chip.format(c=theme.C["muted"]))
-        self.top_gpu.setText(g.name.upper() if g else "NO NVIDIA GPU")
+        sub = "  ·  ".join(x for x in (f"driver {g.driver_version}" if g else "no driver",
+                                       (s.session or "?"), (s.desktop or "?")) if x)
+        self.topbar.set_info(g.name.replace("NVIDIA ", "") if g else "No NVIDIA GPU", sub.lower(), bool(g))
 
     def show_page(self, i: int):
         old = self.stack.currentIndex()
         self.stack.setCurrentIndex(i)
-        self.nav_buttons[i].setChecked(True)
+        self.rail.set_current(i)
         page = self.pages[i]
         page.on_show()
         if self.ctx.settings.animations and old != i:
@@ -259,6 +212,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ data
     def _on_sample(self, t):
         self.ctx.last = t
+        self.topbar.push(t.util_gpu, t.temp_c)
         for p in self.pages:
             p.on_telemetry(t)
         if t.temp_c is not None and t.temp_c >= 90:
@@ -327,11 +281,10 @@ class MainWindow(QMainWindow):
         self.ctx.settings.save()
         theme.set_mode("veneco" if on else "nvidia")
         self.restyle()
-        for i, b in enumerate(self.nav_buttons):
-            b.setText(f"{i + 1:02d}  {L(PAGES[i].nav_key)}")
+        self.rail.set_labels([L(cls.nav_key) for cls in PAGES])
         for p in self.pages:
             p.retranslate()
-        self.rail.setFixedWidth(370 if on else 250)
+        self.rail.setFixedWidth(330 if on else 236)
         self.banner.setVisible(on)
         self.banner.set_running(on and self.ctx.settings.animations)
         self.setWindowTitle("GPU TURBO MEGA ULTRA 3000 — NV//CONTROL" if on else APP_NAME)

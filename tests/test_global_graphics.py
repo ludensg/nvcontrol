@@ -71,3 +71,14 @@ def test_curve_sanitize_matches_helper_rules():
     messy = [[70, 40], [50, 60], [50, 20], [95, 80]]
     clean = sanitize(messy, fan_min=30)
     assert H.validate_curve(clean, fan_min=30) == clean        # whatever the editor produces, the helper accepts
+
+
+def test_ultra_adds_auto_cap_from_refresh():
+    assert G.ultra_cap(144) == 138 and G.ultra_cap(165) == 157 and G.ultra_cap(240) == 224
+    env, dx, notes = G.build(G.GlobalGraphics(low_latency="ultra"), True, False, refresh_hz=164.96)
+    assert dx["dxgi.maxFrameLatency"] == "1" and dx["dxgi.maxFrameRate"] == "157"
+    assert env["VKD3D_FRAME_RATE"] == "157" and any("Ultra" in n for n in notes)
+    on_env, on_dx, _ = G.build(G.GlobalGraphics(low_latency="on"), True, False, refresh_hz=165)
+    assert "dxgi.maxFrameRate" not in on_dx                     # On ≠ Ultra anymore
+    _, dx, _ = G.build(G.GlobalGraphics(low_latency="ultra", max_fps=120), True, False, refresh_hz=165)
+    assert dx["dxgi.maxFrameRate"] == "120"                       # explicit cap wins

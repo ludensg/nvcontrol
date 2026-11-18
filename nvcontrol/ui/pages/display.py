@@ -19,10 +19,8 @@ log = logging.getLogger("nvcontrol.display")
 
 class DisplayPage(Page):
     nav_key = "nav.display"
-    kicker = "// 03 · OUTPUT PIPELINE"
-    subtitle = ("Per-display configuration through KWin (Wayland) or xrandr/nvidia-settings (X11). "
-                "Compositor brightness, monitor backlight (DDC/CI) and HDR are different things and are "
-                "labelled separately.")
+    kicker = "· OUTPUTS"
+    subtitle = "Resolution, refresh, VRR, HDR, color and per-monitor vibrance."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)

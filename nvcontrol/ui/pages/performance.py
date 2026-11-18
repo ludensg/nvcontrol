@@ -12,9 +12,8 @@ POSITIONS = ["top-left", "top-right", "top-center", "bottom-left", "bottom-right
 
 class PerformancePage(Page):
     nav_key = "nav.performance"
-    kicker = "// 06 · FRAME PIPELINE"
-    subtitle = ("Linux has no driver-level global FPS cap or overlay. MangoHud's global config applies to every "
-                "game you launch with MangoHud (per-game profiles override it).")
+    kicker = "· FRAME PACING"
+    subtitle = "Overlay, frame cap and launch wrappers."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)

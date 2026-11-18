@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nvcontrol"
-version = "0.2.0"
+version = "0.2.1"
 description = "NV//CONTROL — NVIDIA control center for CachyOS / Arch Linux (KDE Plasma, Wayland & X11)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,7 +21,7 @@ nvcontrol = "nvcontrol.app:main"
 include = ["nvcontrol*"]
 
 [tool.setuptools.package-data]
-"nvcontrol.ui" = ["*.svg"]
+"nvcontrol.ui" = ["*.svg", "fonts/*.ttf", "fonts/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -25,8 +25,8 @@ DIAGS = [
 
 class ToolsPage(Page):
     nav_key = "nav.tools"
-    kicker = "// 07 · INTEGRATIONS"
-    subtitle = "Launch, install and diagnose the tools NV//CONTROL builds on — no terminal needed."
+    kicker = "· INTEGRATIONS"
+    subtitle = "Launch, install and diagnose the tools NV//CONTROL uses."
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)

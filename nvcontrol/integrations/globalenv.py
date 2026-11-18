@@ -83,7 +83,15 @@ class GlobalGraphics:
         save_json(state_path(), self.__dict__)
 
 
-def build(g: GlobalGraphics, smooth_motion_ok: bool, mfg_ok: bool) -> tuple[dict[str, str], dict[str, str], list[str]]:
+def ultra_cap(refresh_hz: float | None) -> int | None:
+    """NVIDIA's auto-cap formula for Ultra/Reflex with G-SYNC: refresh − refresh²/3600 (144 Hz → 138)."""
+    if not refresh_hz or refresh_hz < 30:
+        return None
+    return int(refresh_hz - refresh_hz * refresh_hz / 3600)
+
+
+def build(g: GlobalGraphics, smooth_motion_ok: bool, mfg_ok: bool,
+          refresh_hz: float | None = None) -> tuple[dict[str, str], dict[str, str], list[str]]:
     """Translate settings into (environment, dxvk.conf options, notes)."""
     env: dict[str, str] = {}
     dx: dict[str, str] = {}
@@ -127,20 +135,27 @@ def build(g: GlobalGraphics, smooth_motion_ok: bool, mfg_ok: bool) -> tuple[dict
         env["__GL_MaxFramesAllowed"] = "1"
         dx["dxgi.maxFrameLatency"] = "1"
         dx["d3d9.maxFrameLatency"] = "1"
-        if g.low_latency == "ultra":
-            notes.append("'Ultra' (just-in-time frame submission) is Windows-only; Linux uses the 'On' queue "
-                         "depth of 1. Use NVIDIA Reflex in-game for the real thing.")
+    auto_cap = None
+    if g.low_latency == "ultra" and not g.max_fps:
+        auto_cap = ultra_cap(refresh_hz)
+        if auto_cap:
+            notes.append(f"Ultra: 1-frame queue + automatic cap at {auto_cap} FPS for your {refresh_hz:.0f} Hz "
+                         "display (keeps VRR engaged). Set Max frame rate to override it.")
+        else:
+            notes.append("Ultra: refresh rate unknown, so no automatic cap; behaves like On.")
     # ---- V-Sync
     if g.vsync in ("on", "off"):
         on = g.vsync == "on"
         env["__GL_SYNC_TO_VBLANK"] = "1" if on else "0"
         dx["dxgi.syncInterval"] = "1" if on else "0"
         dx["d3d9.presentInterval"] = "1" if on else "0"
-    # ---- frame cap
+    # ---- frame cap (explicit value wins over Ultra's automatic cap)
+    cap = g.max_fps or auto_cap
+    if cap:
+        dx["dxgi.maxFrameRate"] = str(cap)
+        dx["d3d9.maxFrameRate"] = str(cap)
+        env["VKD3D_FRAME_RATE"] = str(cap)
     if g.max_fps:
-        dx["dxgi.maxFrameRate"] = str(g.max_fps)
-        dx["d3d9.maxFrameRate"] = str(g.max_fps)
-        env["VKD3D_FRAME_RATE"] = str(g.max_fps)
         notes.append("Max frame rate covers Direct3D games under Proton. For native Vulkan/OpenGL games use "
                      "MangoHud's limiter (PERFORMANCE page) or a per-game FPS limit.")
     # ---- triple buffering
