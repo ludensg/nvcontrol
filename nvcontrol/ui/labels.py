@@ -6,7 +6,9 @@ from . import theme
 NORMAL = {
     "nav.command": "COMMAND CENTER",
     "nav.tuning": "GPU TUNING",
+    "nav.lab": "GPU LAB",
     "nav.display": "DISPLAY",
+    "nav.global": "GLOBAL GRAPHICS",
     "nav.rtx": "RTX / GAMING",
     "nav.profiles": "GAME PROFILES",
     "nav.performance": "PERFORMANCE",
@@ -25,7 +27,9 @@ NORMAL = {
 VENECO = {
     "nav.command": "CENTRO DE COMANDO DEL COÑO",
     "nav.tuning": "PON ESA VAINA A VOLAR",
+    "nav.lab": "EL LABORATORIO DEL LOCO",
     "nav.display": "LA PANTALLITA",
+    "nav.global": "CONFIGURACIÓN DE UNA",
     "nav.rtx": "RTX / JUEGUITO SERIO",
     "nav.profiles": "LOS JUEGUITOS",
     "nav.performance": "RENDIMIENTO ARRECHÍSIMO",

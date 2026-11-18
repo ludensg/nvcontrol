@@ -1,0 +1,16 @@
+[Unit]
+Description=NV//CONTROL — custom GPU fan curve
+Documentation=file:///usr/share/doc/nvcontrol/TROUBLESHOOTING.md
+After=systemd-modules-load.service nvidia-persistenced.service
+ConditionPathExists=/etc/nvcontrol/fancurve.json
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/nvidia-smi -L
+ExecStart=/usr/lib/nvcontrol/nvcontrol-helper fan-curve-run
+ExecStopPost=-/usr/lib/nvcontrol/nvcontrol-helper reset-fan
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

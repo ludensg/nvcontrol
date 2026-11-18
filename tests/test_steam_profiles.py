@@ -166,3 +166,10 @@ def test_mangohud_update_preserves_lines():
         mangohud.update("", {"bad key": "1"})
     with pytest.raises(ValueError):
         mangohud.update("", {"ok": "x\ninjected=1"})
+
+
+def test_per_game_dlss_sr_mode():
+    o = build_launch_options(GameProfile(appid="1", dlss_sr_mode="custom", dlss_sr_ratio=75), False).options
+    assert "DXVK_NVAPI_DRS_NGX_DLSS_SR_MODE=custom" in o and "SCALING_RATIO=75" in o
+    o = build_launch_options(GameProfile(appid="1", dlss_sr_mode="dlaa"), False).options
+    assert "DXVK_NVAPI_DRS_NGX_DLSS_SR_MODE=dlaa" in o

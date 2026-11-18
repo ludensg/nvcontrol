@@ -73,6 +73,17 @@ Enable **Show DLSS indicator** in the profile to see which DLSS version/preset i
 ## MangoHud shows nothing
 Use the `mangohud` wrapper (the profile does this), or `--mangoapp` inside Gamescope (also automatic). 32-bit games need `lib32-mangohud`.
 
+## Global Graphics settings don't take effect
+* They load at **login**: log out and back in, then start Steam again. Check with `env | grep -E "__GL|DXVK|NVPRESENT"` in a new terminal.
+* A game's own launch options (Game Profiles) win over global values.
+* Files: `~/.config/environment.d/90-nvcontrol.conf` and `~/.config/nvcontrol/dxvk.conf`. Delete them (or press RESTORE DEFAULTS) to undo. Backups are in `~/.local/share/nvcontrol/backups/`.
+* Direct3D rows (V-Sync, frame cap, anisotropy, triple buffering) only reach games running through DXVK (Proton/Wine D3D9–11). OpenGL rows only reach OpenGL games.
+
+## Fan curve (GPU LAB)
+* Status: `systemctl status nvcontrol-fancurve`. Log: `journalctl -u nvcontrol-fancurve -b`.
+* Stop it immediately: `sudo systemctl disable --now nvcontrol-fancurve`. The fans return to the card's automatic curve.
+* Don't run it together with a LACT fan curve.
+
 ## Updates
 * "Source folder not found": the app finds the git clone through `~/.config/nvcontrol/source_dir`, which install.sh writes. Run `bash install.sh` once from the clone, or clone to `~/nvcontrol`.
 * "Could not reach GitHub": offline, or the repo is private and git isn't logged in (`gh auth login`).

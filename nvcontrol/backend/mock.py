@@ -6,7 +6,7 @@ import random
 import time
 
 from .base import GpuBackend
-from .models import GpuInfo, OffsetRange, PowerLimits, Telemetry, TuningCaps
+from .models import GpuInfo, OffsetRange, PowerLimits, Telemetry, ThresholdRange, TuningCaps
 
 
 class MockBackend(GpuBackend):
@@ -27,6 +27,12 @@ class MockBackend(GpuBackend):
         self.mem_offset = 0
         self.fan_manual: int | None = None
         self.locked: tuple[int, int] | None = None
+        self.mem_locked: tuple[int, int] | None = None
+        self.temp_target = 83
+        self.persistence = False
+        self.fan_per: dict[int, int] = {}
+        self.fan_curve: list | None = None
+        self.fan_curve_on = False
         self._t0 = time.time()
         self._rng = random.Random(42)
 
@@ -65,4 +71,22 @@ class MockBackend(GpuBackend):
             fan_count=self._info.fan_count, fan_min_pct=30, fan_max_pct=100,
             supports_clock_lock=True,
             supported_gpu_clocks=list(range(210, 3106, 15)),
+            supported_mem_clocks=[405, 810, 5001, 10501, 11501],
+            temp_target=ThresholdRange(65, 91, self.temp_target),
+            persistence=self.persistence,
         )
+
+    def lab_sensors(self, index: int) -> list[tuple[str, str, str]]:
+        t = self.telemetry(index)
+        rows = [("THERMAL LIMITS", "Slowdown", "95 °C"), ("THERMAL LIMITS", "Shutdown", "100 °C"),
+                ("THERMAL LIMITS", "GPU max operating", "90 °C"),
+                ("THERMAL LIMITS", "Temperature target (current)", f"{self.temp_target} °C")]
+        for i in range(self._info.fan_count):
+            rows.append(("FANS", f"Fan {i} speed", f"{self.fan_per.get(i, t.fan_pct):.0f} %"))
+        rows += [("FANS", "Driver fan range", "30–100 %"),
+                 ("PCIe", "Link (current)", "Gen 4 x16" if t.util_gpu > 30 else "Gen 1 x16"),
+                 ("PCIe", "Link (max)", "Gen 4 x16"), ("MEMORY", "BAR1 (Resizable BAR window)", "38 / 16384 MiB"),
+                 ("ENGINES", "NVENC (video encoder)", "0 %"), ("POWER", "Energy since driver load", "0.412 kWh"),
+                 ("P-STATES", "P0 core clock range", "210–3105 MHz"), ("P-STATES", "P8 core clock range", "210–810 MHz"),
+                 ("DRIVER", "Persistence mode", "on" if self.persistence else "off")]
+        return rows

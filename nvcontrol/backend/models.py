@@ -118,6 +118,13 @@ class OffsetRange:
 
 
 @dataclass
+class ThresholdRange:
+    min_c: int
+    max_c: int
+    current_c: int
+
+
+@dataclass
 class TuningCaps:
     """What the driver *reports* as adjustable. Writing still needs root (helper)."""
     power: PowerLimits | None = None
@@ -128,3 +135,6 @@ class TuningCaps:
     fan_max_pct: int | None = None
     supports_clock_lock: bool = False
     supported_gpu_clocks: list[int] = field(default_factory=list)
+    supported_mem_clocks: list[int] = field(default_factory=list)
+    temp_target: ThresholdRange | None = None
+    persistence: bool | None = None

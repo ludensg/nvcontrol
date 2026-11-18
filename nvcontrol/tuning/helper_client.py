@@ -87,6 +87,31 @@ class HelperClient:
     def clear_startup(self):
         return self.call(["clear-startup"])
 
+    # GPU Lab ---------------------------------------------------------------
+    def set_fan_one(self, gpu: int, fan: int, pct: int):
+        return self.call(["set-fan", "--gpu", gpu, "--percent", int(pct), "--fan", int(fan)])
+
+    def set_temp_target(self, gpu: int, c: int):
+        return self.call(["set-temp-target", "--gpu", gpu, "--celsius", int(c)])
+
+    def reset_temp_target(self, gpu: int):
+        return self.call(["reset-temp-target", "--gpu", gpu])
+
+    def lock_mem(self, gpu: int, lo: int, hi: int):
+        return self.call(["lock-mem-clocks", "--gpu", gpu, "--min", int(lo), "--max", int(hi)])
+
+    def reset_mem(self, gpu: int):
+        return self.call(["reset-mem-clocks", "--gpu", gpu])
+
+    def set_persistence(self, gpu: int, on: bool):
+        return self.call(["set-persistence", "--gpu", gpu, "--state", "on" if on else "off"])
+
+    def save_fan_curve(self, gpu: int, points: list[list[int]]):
+        return self.call(["save-fan-curve", "--gpu", gpu, "--points", json.dumps(points, separators=(",", ":"))])
+
+    def fan_curve(self, on: bool):
+        return self.call(["enable-fan-curve" if on else "disable-fan-curve"])
+
     def apply(self, gpu: int, s: dict, unlock: bool = False, fan_auto: bool = False):
         """One pkexec prompt for a whole batch of settings."""
         a = ["apply", "--gpu", gpu]
@@ -143,6 +168,27 @@ class MockHelperClient(HelperClient):
                     self.b.fan_manual = int(opts["--fan"])
                 if "--fan-auto" in opts:
                     self.b.fan_manual = None
+            elif cmd == "set-temp-target":
+                c = int(opts["--celsius"])
+                if not 65 <= c <= 91:
+                    raise ValueError(f"temperature target {c} outside driver range [65, 91]")
+                self.b.temp_target = c
+            elif cmd == "reset-temp-target":
+                self.b.temp_target = 83
+            elif cmd == "lock-mem-clocks":
+                self.b.mem_locked = (int(opts["--min"]), int(opts["--max"]))
+            elif cmd == "reset-mem-clocks":
+                self.b.mem_locked = None
+            elif cmd == "set-persistence":
+                self.b.persistence = opts["--state"] == "on"
+            elif cmd == "save-fan-curve":
+                self.b.fan_curve = json.loads(opts["--points"])
+            elif cmd in ("enable-fan-curve", "disable-fan-curve"):
+                if cmd == "enable-fan-curve" and not self.b.fan_curve:
+                    raise ValueError("save a fan curve first")
+                self.b.fan_curve_on = cmd == "enable-fan-curve"
+            elif cmd == "set-fan" and "--fan" in opts:
+                self.b.fan_per[int(opts["--fan"])] = int(opts["--percent"])
             elif cmd == "set-power-limit":
                 w = float(opts["--watts"])
                 if not caps.power.min_w <= w <= caps.power.max_w:

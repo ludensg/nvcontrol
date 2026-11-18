@@ -53,7 +53,8 @@ def test_output_selection_survives_refresh_and_resume(app, monkeypatch):
     ctx = AppContext(mock=True)
     ctx.detect_system()
     w = MainWindow(ctx)
-    page = w.pages[2]
+    from nvcontrol.ui.pages.display import DisplayPage
+    page = next(p for p in w.pages if isinstance(p, DisplayPage))
     page.out.setCurrentIndex(1)
     name = page._cur().name
     page.on_caps()                                  # what APPLY OUTPUT triggers via refresh
@@ -84,3 +85,29 @@ def test_kscreen_brightness_parsing():
     assert _brightness_pct(1.0) == 100 and _brightness_pct(1) == 100
     assert _brightness_pct(0.35) == 35 and _brightness_pct(70) == 70
     assert _brightness_pct(None) is None
+
+
+def test_global_graphics_and_lab_pages(app, monkeypatch):
+    from nvcontrol.integrations import globalenv as G
+    from nvcontrol.ui.context import AppContext
+    from nvcontrol.ui.main_window import MainWindow
+    from nvcontrol.ui.pages.global_graphics import GlobalGraphicsPage
+    from nvcontrol.ui.pages.lab import LabPage
+    ctx = AppContext(mock=True)
+    ctx.detect_system()
+    w = MainWindow(ctx)
+    gp = next(p for p in w.pages if isinstance(p, GlobalGraphicsPage))
+    gp.widgets["anisotropic"].setCurrentIndex(gp.widgets["anisotropic"].findData("16x"))
+    gp.widgets["max_fps"].setValue(297)
+    assert "d3d11.samplerAnisotropy = 16" in gp.preview.toPlainText()
+    assert not gp.widgets["dlss_mfg_count"].isEnabled()          # RTX 4080 mock → no MFG
+    gp._apply()
+    assert "dxgi.maxFrameRate = 297" in G.dxvk_path().read_text()
+    lab = next(p for p in w.pages if isinstance(p, LabPage))
+    assert lab.tt.isEnabled() and lab.tt.minimum() == 65 and len(lab.fan_sliders) == 2
+    w.show()
+    w.show_page(w.pages.index(lab))
+    lab.tabs.setCurrentIndex(2)
+    lab._refresh_sensors()
+    assert lab.sens.rowCount() > 5
+    w.close()

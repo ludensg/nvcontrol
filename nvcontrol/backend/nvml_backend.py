@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from .base import GpuBackend
-from .models import (ARCH_NAMES, GpuInfo, OffsetRange, PowerLimits, Telemetry,
+from .models import (ARCH_NAMES, GpuInfo, OffsetRange, PowerLimits, Telemetry, ThresholdRange,
                      TuningCaps, guess_arch_from_name)
 
 log = logging.getLogger(__name__)
@@ -149,10 +149,72 @@ class NvmlBackend(GpuBackend):
                   if mem_clocks else None)
         if clocks:
             caps.supported_gpu_clocks = sorted({int(c) for c in clocks})
+        caps.supported_mem_clocks = sorted({int(c) for c in mem_clocks})
+        t = [self._try(N.nvmlDeviceGetTemperatureThreshold, h, getattr(N, k, -1)) for k in
+             ("NVML_TEMPERATURE_THRESHOLD_ACOUSTIC_MIN", "NVML_TEMPERATURE_THRESHOLD_ACOUSTIC_MAX",
+              "NVML_TEMPERATURE_THRESHOLD_ACOUSTIC_CURR")]
+        if all(v is not None for v in t) and t[1] > t[0]:
+            caps.temp_target = ThresholdRange(int(t[0]), int(t[1]), int(t[2]))
+        pm = self._try(N.nvmlDeviceGetPersistenceMode, h)
+        caps.persistence = None if pm is None else bool(pm)
         arch = self._try(N.nvmlDeviceGetArchitecture, h)
         # Locked clocks: Volta+ per NVML docs
         caps.supports_clock_lock = arch is not None and arch >= 5
         return caps
+
+    def lab_sensors(self, index: int) -> list[tuple[str, str, str]]:
+        if not self._ok or index >= len(self._handles):
+            return []
+        h, T, rows = self._handles[index], self._try, []
+
+        def add(sec, lab, val, fmt="{}"):
+            rows.append((sec, lab, "not supported" if val is None else fmt.format(val)))
+
+        for lab, k in (("Slowdown", "SLOWDOWN"), ("Shutdown", "SHUTDOWN"), ("GPU max operating", "GPU_MAX"),
+                       ("Memory max operating", "MEM_MAX"), ("Temperature target (current)", "ACOUSTIC_CURR"),
+                       ("Temperature target range min", "ACOUSTIC_MIN"),
+                       ("Temperature target range max", "ACOUSTIC_MAX")):
+            add("THERMAL LIMITS", lab, T(N.nvmlDeviceGetTemperatureThreshold, h,
+                                         getattr(N, f"NVML_TEMPERATURE_THRESHOLD_{k}", -1)), "{} °C")
+        n = T(N.nvmlDeviceGetNumFans, h, default=0) or 0
+        for i in range(n):
+            add("FANS", f"Fan {i} speed", T(N.nvmlDeviceGetFanSpeed_v2, h, i), "{} %")
+            add("FANS", f"Fan {i} target", T(N.nvmlDeviceGetTargetFanSpeed, h, i), "{} %")
+        add("FANS", "Fan RPM (fan 0)", T(N.nvmlDeviceGetFanSpeedRPM, h), "{} rpm")
+        mm = T(N.nvmlDeviceGetMinMaxFanSpeed, h)
+        add("FANS", "Driver fan range", f"{mm[0]}–{mm[1]} %" if mm else None)
+        add("PCIe", "Link (current)", T(lambda: f"Gen {N.nvmlDeviceGetCurrPcieLinkGeneration(h)} "
+                                                f"x{N.nvmlDeviceGetCurrPcieLinkWidth(h)}"))
+        add("PCIe", "Link (max)", T(lambda: f"Gen {N.nvmlDeviceGetMaxPcieLinkGeneration(h)} "
+                                            f"x{N.nvmlDeviceGetMaxPcieLinkWidth(h)}"))
+        add("PCIe", "TX throughput", T(N.nvmlDeviceGetPcieThroughput, h, N.NVML_PCIE_UTIL_TX_BYTES),
+            "{} KB/s")
+        add("PCIe", "RX throughput", T(N.nvmlDeviceGetPcieThroughput, h, N.NVML_PCIE_UTIL_RX_BYTES),
+            "{} KB/s")
+        bar = T(N.nvmlDeviceGetBAR1MemoryInfo, h)
+        add("MEMORY", "BAR1 (Resizable BAR window)", f"{bar.bar1Used / 2**20:.0f} / {bar.bar1Total / 2**20:.0f} MiB"
+            if bar else None)
+        mems = T(N.nvmlDeviceGetSupportedMemoryClocks, h) or []
+        add("MEMORY", "Supported memory clocks", ", ".join(str(m) for m in sorted(mems)) + " MHz" if mems else None)
+        enc = T(N.nvmlDeviceGetEncoderUtilization, h)
+        dec = T(N.nvmlDeviceGetDecoderUtilization, h)
+        add("ENGINES", "NVENC (video encoder)", enc[0] if enc else None, "{} %")
+        add("ENGINES", "NVDEC (video decoder)", dec[0] if dec else None, "{} %")
+        e = T(N.nvmlDeviceGetTotalEnergyConsumption, h)
+        add("POWER", "Energy since driver load", e / 3.6e9 if e is not None else None, "{:.3f} kWh")
+        for lab, k in (("Time power-limited", "NVML_PERF_POLICY_POWER"),
+                       ("Time thermal-limited", "NVML_PERF_POLICY_THERMAL")):
+            v = T(N.nvmlDeviceGetViolationStatus, h, getattr(N, k, -1))
+            add("POWER", lab, v.violationTime / 1e9 if v else None, "{:.1f} s")
+        ps = T(N.nvmlDeviceGetSupportedPerformanceStates, h) or []
+        for p in ps[:6]:
+            r = T(N.nvmlDeviceGetMinMaxClockOfPState, h, N.NVML_CLOCK_GRAPHICS, p)
+            add("P-STATES", f"P{p} core clock range", f"{r[0]}–{r[1]} MHz" if r else None)
+        add("DRIVER", "Persistence mode", {1: "on", 0: "off"}.get(T(N.nvmlDeviceGetPersistenceMode, h)))
+        add("DRIVER", "Display active", {1: "yes", 0: "no"}.get(T(N.nvmlDeviceGetDisplayActive, h)))
+        add("DRIVER", "Max boost clock", T(N.nvmlDeviceGetMaxClockInfo, h, N.NVML_CLOCK_GRAPHICS), "{} MHz")
+        add("DRIVER", "Max memory clock", T(N.nvmlDeviceGetMaxClockInfo, h, N.NVML_CLOCK_MEM), "{} MHz")
+        return rows
 
     def close(self) -> None:
         if self._ok:

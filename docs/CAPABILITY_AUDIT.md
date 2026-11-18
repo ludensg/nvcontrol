@@ -60,6 +60,42 @@ Status vocabulary used in the UI:
 | FPS limit | MangoHud `fps_limit` or Gamescope `--framerate-limit` | Global MangoHud config + per-game |
 | Shader cache size | `__GL_SHADER_DISK_CACHE_SIZE` | Per-game |
 
+## NVIDIA App ▸ Graphics ▸ Global settings: full mapping (v0.2)
+
+| NVIDIA App row | Linux | How NV//CONTROL applies it globally |
+|---|---|---|
+| DLSS Override – Model presets (SR / RR) | Proton games | `DXVK_NVAPI_DRS_NGX_DLSS_{SR,RR}_OVERRIDE=on` + `…_RENDER_PRESET_SELECTION` |
+| DLSS Override – Super Resolution mode | Proton games | `DXVK_NVAPI_DRS_NGX_DLSS_SR_MODE=dlaa` or `custom` + `NGX_DLSS_SR_OVERRIDE_SCALING_RATIO` |
+| DLSS Override – Frame Generation | Proton, RTX 40/50 | `DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE=on`; multi-frame count `NGX_DLSSG_MULTI_FRAME_COUNT` (RTX 50 only, experimental) |
+| Smooth Motion | Vulkan path | `NVPRESENT_ENABLE_SMOOTH_MOTION=1` (warns: global = every Vulkan app) |
+| Low latency mode | Partial | `__GL_MaxFramesAllowed=1` (OpenGL) + DXVK `maxFrameLatency=1`. "Ultra" is Windows-only → use Reflex |
+| Vertical sync | Partial | `__GL_SYNC_TO_VBLANK` + DXVK `dxgi.syncInterval` / `d3d9.presentInterval` |
+| Max frame rate | Direct3D games | DXVK `maxFrameRate` + `VKD3D_FRAME_RATE`; native games: MangoHud |
+| Triple buffering | Direct3D games | DXVK `numBackBuffers=3` |
+| Anisotropic filtering | Yes | `__GL_LOG_MAX_ANISO` + DXVK `samplerAnisotropy` |
+| Texture filtering – Negative LOD bias | Direct3D games | DXVK `clampNegativeLodBias` |
+| Threaded optimization | OpenGL | `__GL_THREADED_OPTIMIZATIONS` |
+| Shader cache size | Yes | `__GL_SHADER_DISK_CACHE_SIZE` + `SKIP_CLEANUP` |
+| Power management mode | Emulated | Locked minimum core clock via NVML (X11 PowerMizer also possible) |
+| Monitor technology | Yes | KWin VRR policy on all outputs |
+| Image scaling, DSR, background FPS cap, CUDA sysmem fallback, GDI compat, present method, VRSS, RTX Dynamic Vibrance, RTX HDR, AO, MFAA, FXAA/AA modes, texture quality/trilinear/sample optimisation, PhysX | Windows-only | Alternatives listed in the app |
+
+Environment changes go to `~/.config/environment.d/90-nvcontrol.conf` (picked up at next login by the
+systemd user session, which Plasma uses to launch apps) and `~/.config/nvcontrol/dxvk.conf` via `DXVK_CONFIG_FILE`.
+
+## GPU Lab: NVML controls used (v0.2)
+
+| Control | NVML call | Notes |
+|---|---|---|
+| Temperature target | `nvmlDeviceSetTemperatureThreshold(ACOUSTIC_CURR)` | Range from `ACOUSTIC_MIN/MAX`; factory value remembered for reset |
+| Memory clock lock | `nvmlDeviceSetMemoryLockedClocks` | Values from `nvmlDeviceGetSupportedMemoryClocks` |
+| Per-fan speed | `nvmlDeviceSetFanSpeed_v2(fan)` | Driver minimum enforced |
+| Fan curve service | loop: `GetTemperature` → `SetFanSpeed_v2`; `SetDefaultFanSpeed_v2` on exit | 2–12 points, monotonic, 100 % from 87 °C, 3 °C hysteresis |
+| Persistence mode | `nvmlDeviceSetPersistenceMode` | |
+| Sensors | thresholds, fan speed/target/RPM, PCIe gen/width/throughput, BAR1, NVENC/NVDEC, energy, violation status, P-state clock ranges | read-only |
+
+Verification level: the DXVK-NVAPI keys (`NGX_DLSS_SR_MODE`, `NGX_DLSS_SR_OVERRIDE_SCALING_RATIO`, `NGX_DLSSG_MULTI_FRAME_COUNT`, `NGX_DLSS_FG_OVERRIDE`) are documented by DXVK-NVAPI. `VKD3D_FRAME_RATE` and DXVK `clampNegativeLodBias` should be confirmed against the Proton version in use. If a game ignores them, nothing breaks.
+
 ## Assumptions
 
 * Driver ≥ 570 (CachyOS ships current production/feature branches via `chwd`). Older drivers still work for telemetry; features gate themselves on version.

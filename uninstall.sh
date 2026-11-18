@@ -11,7 +11,7 @@ if [[ -x /usr/lib/nvcontrol/nvcontrol-helper ]]; then
   run sudo /usr/lib/nvcontrol/nvcontrol-helper reset-all || true
   run sudo /usr/lib/nvcontrol/nvcontrol-helper clear-startup || true
 fi
-run sudo systemctl disable --now nvcontrol-apply.service nvcontrol-stable.timer 2>/dev/null || true
+run sudo systemctl disable --now nvcontrol-apply.service nvcontrol-stable.timer nvcontrol-fancurve.service 2>/dev/null || true
 if pacman -Q nvcontrol >/dev/null 2>&1; then run sudo pacman -Rns nvcontrol; fi
 rm -f "$HOME/.config/autostart/nvcontrol-vibrance.desktop"
 

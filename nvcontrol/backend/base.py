@@ -23,6 +23,10 @@ class GpuBackend(ABC):
     def tuning_caps(self, index: int) -> TuningCaps:
         return TuningCaps()
 
+    def lab_sensors(self, index: int) -> list[tuple[str, str, str]]:
+        """Deep diagnostics as (section, label, value) rows. Empty if unsupported."""
+        return []
+
     def close(self) -> None:
         pass
 

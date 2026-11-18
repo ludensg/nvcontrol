@@ -2,7 +2,7 @@
 # Local PKGBUILD: builds NV//CONTROL from this source tree into a native pacman package.
 #   makepkg -si        (install.sh does this for you)
 pkgname=nvcontrol
-pkgver=0.1.4
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="NV//CONTROL — NVIDIA control center for CachyOS/Arch (telemetry, tuning, display, Steam/Proton profiles)"
 arch=('any')
@@ -46,6 +46,7 @@ package() {
   install -Dm644 data/polkit/org.nvcontrol.helper.policy "$pkgdir/usr/share/polkit-1/actions/org.nvcontrol.helper.policy"
   install -Dm644 data/systemd/nvcontrol-apply.service "$pkgdir/usr/lib/systemd/system/nvcontrol-apply.service"
   install -Dm644 data/systemd/nvcontrol-stable.service "$pkgdir/usr/lib/systemd/system/nvcontrol-stable.service"
+  install -Dm644 data/systemd/nvcontrol-fancurve.service "$pkgdir/usr/lib/systemd/system/nvcontrol-fancurve.service"
   install -Dm644 data/systemd/nvcontrol-stable.timer "$pkgdir/usr/lib/systemd/system/nvcontrol-stable.timer"
   install -Dm644 data/nvcontrol.desktop "$pkgdir/usr/share/applications/nvcontrol.desktop"
   install -Dm644 data/icons/nvcontrol.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/nvcontrol.svg"

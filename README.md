@@ -14,12 +14,14 @@ can't do something, the app says so plainly instead of showing a fake switch.
 |---|---|
 | **01 Command Center** | Live gauges and graphs: temperature, load, power, fan, core/memory clocks, VRAM, P-state, clock limiters. Selectable polling (250 ms – 5 s). Diagnostic report export |
 | **02 GPU Tuning** | Power limit, core/memory clock offsets, clock locking (undervolt recipe), manual fan speed. Presets: Balanced / Max Performance / Quiet / Power Efficient / Custom. **TEST 20 s** auto-reverts. Startup profile with crash guard. Reset to defaults. Fan curves via LACT |
-| **03 Display** | Resolution, refresh, scale, position, VRR (G-SYNC Compatible), HDR, ICC, compositor brightness (KDE) or xrandr (X11). Per-monitor Digital Vibrance with IDENTIFY (nvidia-settings on X11, nVibrant on Wayland). Real monitor brightness/contrast over DDC/CI. Risky changes auto-revert after 15 s |
-| **04 RTX / Gaming** | Per-feature status for DLSS SR/RR/FG/MFG, Smooth Motion, Reflex: who controls it (game, Proton or driver) and how to use it. Defaults for new profiles. Proton / GE-Proton discovery |
-| **05 Game Profiles** | Steam library (only after you allow it). Per game: Proton version, Smooth Motion (only when supported), DLSS preset overrides, NGX updater, DLSS indicator, NVAPI, shader cache, MangoHud, FPS limit, GameMode, Gamescope, extra env, game args, notes. **Live preview of the exact launch string.** Writing to Steam is safe: Steam must be closed, a backup is taken, other settings are kept, the write is atomic and verified, and you can roll back. Profiles import/export |
-| **06 Performance** | Global MangoHud config (preset, FPS cap, position, toggle key, logging), GOverlay, and what's global vs per-game vs launcher-only |
-| **07 System Tools** | Launch/install LACT, NVIDIA Settings, MangoHud, GOverlay, Steam, Gamescope, KDE display settings, ProtonUp-Qt. One-click diagnostics (nvidia-smi, vulkaninfo, kernel log, services). Full feature matrix |
-| **08 Settings** | Polling, animations, scanlines, sound, **logs & bug report**, setup wizard, and a certain button |
+| **03 GPU Lab** | Everything NVML lets you touch on this card: **temperature target** (GPU backs off boost at N °C), **memory clock locking**, **per-fan speed**, a real **fan-curve service** (draggable curve editor, 87 °C failsafe, hysteresis, keeps running with the app closed), **persistence mode**, **Prefer maximum performance**, and a live **SENSORS** table (thermal limits, per-fan speed/target/RPM, PCIe link and throughput, BAR1/Resizable BAR, NVENC/NVDEC, energy, time spent power/thermal-limited, P-state clock ranges) |
+| **04 Display** | Resolution, refresh, scale, position, VRR (G-SYNC Compatible), HDR, ICC, compositor brightness (KDE) or xrandr (X11). Per-monitor Digital Vibrance with IDENTIFY (nvidia-settings on X11, nVibrant on Wayland). Real monitor brightness/contrast over DDC/CI. Risky changes auto-revert after 15 s |
+| **05 Global Graphics** | The NVIDIA App's *Graphics ▸ Global settings* list row by row. Linux-supported rows become a session environment file plus a DXVK config, so they apply to **every game**: DLSS preset overrides (SR/RR), DLSS SR mode (DLAA / custom render scale), FG override, MFG count (RTX 50), NGX updater, DLSS indicator, Smooth Motion, low latency mode, V-Sync, max frame rate, triple buffering, anisotropic filtering, negative LOD bias, threaded optimization, shader cache size. Power management mode and monitor technology (VRR) apply immediately. Windows-only rows are listed with alternatives |
+| **06 RTX / Gaming** | Per-feature status for DLSS SR/RR/FG/MFG, Smooth Motion, Reflex: who controls it (game, Proton or driver) and how to use it. Defaults for new profiles. Proton / GE-Proton discovery |
+| **07 Game Profiles** | Steam library (only after you allow it). Per game: Proton version, Smooth Motion (only when supported), DLSS preset overrides, DLSS SR mode (DLAA / custom scale), NGX updater, DLSS indicator, NVAPI, shader cache, MangoHud, FPS limit, GameMode, Gamescope, extra env, game args, notes. **Live preview of the exact launch string.** Writing to Steam is safe: Steam must be closed, a backup is taken, other settings are kept, the write is atomic and verified, and you can roll back. Profiles import/export |
+| **08 Performance** | Global MangoHud config (preset, FPS cap, position, toggle key, logging), GOverlay, and what's global vs per-game vs launcher-only |
+| **09 System Tools** | Launch/install LACT, NVIDIA Settings, MangoHud, GOverlay, Steam, Gamescope, KDE display settings, ProtonUp-Qt. One-click diagnostics (nvidia-smi, vulkaninfo, kernel log, services). Full feature matrix |
+| **10 Settings** | Polling, animations, scanlines, sound, **logs & bug report**, setup wizard, and a certain button |
 
 A **first-run wizard** inspects the system, offers to install missing dependencies (showing the exact `pacman`
 command first), shows the feature matrix, applies a preset (snapshotting your original values), and
@@ -96,7 +98,7 @@ command before polkit asks for your password.
 ```bash
 QT_QPA_PLATFORM=offscreen python -m pytest -q
 ```
-51 tests run without NVIDIA hardware using mocked GPU, mocked Steam tree and mocked helper. They cover
+70+ tests run without NVIDIA hardware using mocked GPU, mocked Steam tree and mocked helper. They cover
 VDF round-trips, Steam write safety (running-guard, backup, preservation, rollback), launch-option
 quoting and injection resistance, Smooth Motion gating per GPU/driver, feature-matrix logic, helper
 validation and crash guard, MangoHud config merging, logging and crash capture, and a UI smoke test
@@ -104,7 +106,7 @@ of every page plus Veneco Mode.
 
 ## Not implemented / limits (honest list)
 
-* **Fan curves and VF-curve editing** are delegated to LACT (needs a daemon). No duplicate daemon is shipped.
+* **VF-curve editing** (per-voltage points) isn't exposed by NVIDIA on Linux; LACT has the closest tooling. Fan curves are built in (GPU LAB), or use LACT's, but not both at once.
 * **Per-game GPU tuning profiles** are not switched automatically. Tuning is global; the profile field is a reminder. LACT can auto-switch its own profiles by process.
 * **Multi-GPU**: telemetry/tuning use the first NVIDIA GPU (`selected_gpu` in settings.json). There's no GPU picker UI yet.
 * **Non-Steam launchers** (Lutris, Heroic): the launch-option preview can be copied, but they aren't written automatically.

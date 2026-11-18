@@ -15,6 +15,8 @@ from .context import AppContext, TelemetryThread
 from .labels import L
 from .pages.dashboard import DashboardPage
 from .pages.display import DisplayPage
+from .pages.global_graphics import GlobalGraphicsPage
+from .pages.lab import LabPage
 from .pages.performance import PerformancePage
 from .pages.profiles import ProfilesPage
 from .pages.rtx import RtxPage
@@ -25,7 +27,8 @@ from .veneco import KeygenDialog, Sounds, VenecoBanner, VenecoIntro
 from .widgets import ScanlineOverlay, button, label
 
 log = logging.getLogger("nvcontrol.ui")
-PAGES = [DashboardPage, TuningPage, DisplayPage, RtxPage, ProfilesPage, PerformancePage, ToolsPage, SettingsPage]
+PAGES = [DashboardPage, TuningPage, LabPage, DisplayPage, GlobalGraphicsPage, RtxPage, ProfilesPage,
+         PerformancePage, ToolsPage, SettingsPage]
 
 
 class ResumeWatcher(QObject):
@@ -160,7 +163,8 @@ class MainWindow(QMainWindow):
         self.stack.setObjectName("Workspace")
         body.addWidget(self.stack, 1)
         self.pages = [cls(ctx, self) for cls in PAGES]
-        for p in self.pages:
+        for i, p in enumerate(self.pages):
+            p.k.setText(f"// {i + 1:02d} · {p.kicker.split('·', 1)[-1].strip()}")
             self.stack.addWidget(p)
         self.scan = ScanlineOverlay(self.stack)
 

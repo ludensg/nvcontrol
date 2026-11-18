@@ -21,6 +21,8 @@ class GameProfile:
     ngx_updater: bool = False             # PROTON_ENABLE_NGX_UPDATER=1
     dlss_sr_override: bool = False
     dlss_sr_preset: str = "default"
+    dlss_sr_mode: str = "app"              # app | dlaa | custom
+    dlss_sr_ratio: int = 67                # render scale % for custom
     dlss_rr_override: bool = False
     dlss_rr_preset: str = "default"
     dlss_fg_override: bool = False
@@ -62,6 +64,9 @@ class GameProfile:
         for attr in ("dlss_sr_preset", "dlss_rr_preset"):
             if getattr(self, attr) not in DLSS_PRESETS:
                 setattr(self, attr, "default")
+        if self.dlss_sr_mode not in ("app", "dlaa", "custom"):
+            self.dlss_sr_mode = "app"
+        self.dlss_sr_ratio = max(33, min(100, int(self.dlss_sr_ratio or 67)))
         if self.gs_filter not in GAMESCOPE_FILTERS:
             self.gs_filter = ""
         for attr in ("fps_limit", "gs_width", "gs_height", "gs_render_width", "gs_render_height",
@@ -94,11 +99,16 @@ def build_launch_options(p: GameProfile, smooth_motion_allowed: bool,
         env["PROTON_ENABLE_NVAPI"] = "1"
     if p.ngx_updater:
         env["PROTON_ENABLE_NGX_UPDATER"] = "1"
-    any_dlss = p.dlss_sr_override or p.dlss_rr_override or p.dlss_fg_override
+    any_dlss = p.dlss_sr_override or p.dlss_rr_override or p.dlss_fg_override or p.dlss_sr_mode != "app"
     if p.dlss_sr_override:
         env["DXVK_NVAPI_DRS_NGX_DLSS_SR_OVERRIDE"] = "on"
         if p.dlss_sr_preset != "default":
             env["DXVK_NVAPI_DRS_NGX_DLSS_SR_OVERRIDE_RENDER_PRESET_SELECTION"] = p.dlss_sr_preset
+    if p.dlss_sr_mode == "dlaa":
+        env["DXVK_NVAPI_DRS_NGX_DLSS_SR_MODE"] = "dlaa"
+    elif p.dlss_sr_mode == "custom":
+        env["DXVK_NVAPI_DRS_NGX_DLSS_SR_MODE"] = "custom"
+        env["DXVK_NVAPI_DRS_NGX_DLSS_SR_OVERRIDE_SCALING_RATIO"] = str(p.dlss_sr_ratio)
     if p.dlss_rr_override:
         env["DXVK_NVAPI_DRS_NGX_DLSS_RR_OVERRIDE"] = "on"
         if p.dlss_rr_preset != "default":
