@@ -90,3 +90,12 @@ def test_profile_adds_verification_env():
     o = build_launch_options(p, True, sm_log_path="/home/u/.local/state/nvcontrol/smoothmotion/7.log").options
     assert "NVPRESENT_LOG_LEVEL=4" in o and "NVPRESENT_LOG_FILE=/home/u/" in o
     assert "NVPRESENT_LOG" not in build_launch_options(p, False, sm_log_path="/x").options
+
+
+def test_only_games_are_candidates():
+    # global env var on a desktop service (the dbus-broker-launch bug) must be ignored
+    assert not SM.is_candidate(None, env_on=True, layer_loaded=False, vulkan=False)
+    assert not SM.is_candidate("0", env_on=True, layer_loaded=False, vulkan=True)
+    assert not SM.is_candidate(None, env_on=True, layer_loaded=None, vulkan=True)   # random Vulkan app
+    assert SM.is_candidate("1091500", env_on=True, layer_loaded=False, vulkan=True)  # Steam game
+    assert SM.is_candidate(None, env_on=True, layer_loaded=True, vulkan=True)        # layer really running

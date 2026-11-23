@@ -197,8 +197,11 @@ class SmoothMotionPanel(HudPanel):
                 self.verdict.setText("✕  Smooth Motion can't work right now")
                 self.verdict.setStyleSheet(f"color: {qc('crit').name()};")
                 self.reasons.setText(f"{bad.name}: {bad.detail}")
-            self.live.setText("No running game detected." if self.appid is None
-                              else "This game isn't running right now.")
+            glob = SM.enabled_globally()
+            self.live.setText(("No running game detected." if self.appid is None
+                               else "This game isn't running right now.")
+                              + ("  Smooth Motion is enabled globally for your session (Global Graphics), "
+                                 "so every Vulkan game will use it." if glob else ""))
         self._show_log()
         self.main.smooth_motion_status(games)
 

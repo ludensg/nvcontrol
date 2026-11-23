@@ -2,7 +2,7 @@
 # Local PKGBUILD: builds NV//CONTROL from this source tree into a native pacman package.
 #   makepkg -si        (install.sh does this for you)
 pkgname=nvcontrol
-pkgver=0.2.2
+pkgver=0.2.3
 pkgrel=1
 pkgdesc="NV//CONTROL — NVIDIA control center for CachyOS/Arch (telemetry, tuning, display, Steam/Proton profiles)"
 arch=('any')

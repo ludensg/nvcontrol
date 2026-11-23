@@ -145,6 +145,18 @@ def _elf32(pid: str) -> bool:
         return False
 
 
+def is_candidate(appid: str | None, env_on: bool, layer_loaded: bool | None, vulkan: bool) -> bool:
+    """Only games count. With Smooth Motion enabled globally every desktop process carries the env var,
+    so the variable alone means nothing: we need a Steam game (SteamAppId) or the layer actually loaded."""
+    if layer_loaded:
+        return True
+    return bool(appid and appid != "0" and (vulkan or env_on))
+
+
+def enabled_globally() -> bool:
+    return os.environ.get(ENV) == "1"
+
+
 def judge(g: RunningGame, driver: tuple[int, ...]) -> RunningGame:
     if g.layer_loaded is None and g.env_on and g.vulkan and not (g.wined3d and not g.dxvk):
         g.active = True
@@ -208,7 +220,7 @@ def scan(layer_libs: list[str] | None = None, driver_version: str = "") -> list[
         appid = env.get("SteamAppId") or env.get("SteamGameId")
         env_on = env.get(ENV) == "1"
         if not (env_on or (appid and appid != "0")):
-            continue
+            continue                         # cheap pre-filter before reading memory maps
         try:
             maps = Path(f"/proc/{pid}/maps").read_text(errors="replace")
         except OSError:
@@ -227,7 +239,7 @@ def scan(layer_libs: list[str] | None = None, driver_version: str = "") -> list[
         g = RunningGame(int(pid), name, appid if appid and appid != "0" else None, env_on, layer_loaded, vulkan,
                         "wined3d" in maps, "/dxvk/" in maps or "vkd3d" in maps, _elf32(pid),
                         env.get("NVPRESENT_LOG_FILE"))
-        if not (vulkan or layer_loaded or env_on):
+        if not is_candidate(appid, env_on, layer_loaded, vulkan):
             continue
         key = g.appid or f"pid{pid}"
         rank = (bool(g.layer_loaded), g.vulkan, g.env_on)
