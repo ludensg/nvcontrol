@@ -84,7 +84,8 @@ def run(
     if proc.returncode == 0:
         log.debug("ok: %s", argv)
     else:
-        (log.debug if quiet else log.warning)("exit %d: %s | stderr: %s", proc.returncode, argv, (proc.stderr or "").strip()[:500])
+        detail = (proc.stderr or "").strip() or (proc.stdout or "").strip()   # nvidia-smi prints errors on stdout
+        (log.debug if quiet else log.warning)("exit %d: %s | output: %s", proc.returncode, argv, detail[:500])
     return Result(proc.returncode == 0, proc.returncode, proc.stdout, proc.stderr)
 
 

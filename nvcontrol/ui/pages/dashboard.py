@@ -105,9 +105,10 @@ class DashboardPage(Page):
     def on_caps(self):
         g = self.ctx.gpu
         if not g:
-            self.gpu_name.setText("NO NVIDIA GPU DETECTED")
-            self.ident_line.setText(self.ctx.backend.source + " — check that the nvidia driver is loaded "
-                                    "(lsmod | grep nvidia) and nvidia-utils is installed.")
+            h = self.ctx.health
+            self.gpu_name.setText(h.title if h and not h.ok else "No NVIDIA GPU detected")
+            self.ident_line.setText((h.detail if h and not h.ok else self.ctx.backend.source) +
+                                    "  See the banner above for how to fix it.")
             return
         self.gpu_name.setText(g.name)
         vram = f"{g.vram_total_mb / 1024:.0f} GB" if g.vram_total_mb else "?"

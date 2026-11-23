@@ -119,6 +119,9 @@ class ProfilesPage(Page):
         split.setStretchFactor(1, 3)
         split.setMinimumHeight(640)
         self.lay.addWidget(split)
+        from ..status_panels import SmoothMotionPanel
+        self.sm_panel = SmoothMotionPanel(ctx, main, "Smooth Motion check · this game")
+        self.lay.addWidget(self.sm_panel)
         self._set_editor_enabled(False)
 
     # ------------------------------------------------------------------ form
@@ -135,6 +138,7 @@ class ProfilesPage(Page):
         f.addRow("Proton version", self.proton)
         self.nvapi = QCheckBox("PROTON_ENABLE_NVAPI=1 (needed for DLSS/Reflex in some titles)")
         self.sm = QCheckBox("NVIDIA Smooth Motion (NVPRESENT_ENABLE_SMOOTH_MOTION=1)")
+        self.smv = QCheckBox("Smooth Motion verification log (proves it's running; turn off afterwards)")
         self.ngx = QCheckBox("Fetch newer DLSS via NGX updater (PROTON_ENABLE_NGX_UPDATER=1)")
         self.sr = QCheckBox("Override DLSS Super Resolution preset")
         self.sr_p = QComboBox()
@@ -155,7 +159,7 @@ class ProfilesPage(Page):
         self.cache.setRange(0, 64)
         self.cache.setSuffix(" GB")
         self.cache.setSpecialValueText("driver default")
-        for row in (self.nvapi, self.sm, self.ngx):
+        for row in (self.nvapi, self.sm, self.smv, self.ngx):
             f.addRow("", row)
         f.addRow("", self.sr)
         f.addRow("SR preset", self.sr_p)
@@ -236,7 +240,8 @@ class ProfilesPage(Page):
         f.addRow("Notes", self.notes)
         self.tabs.addTab(w, "ADVANCED")
 
-        for wdg in (self.nvapi, self.sm, self.ngx, self.sr, self.rr, self.fg, self.ind, self.mh, self.gm, self.gs,
+        self.sm.toggled.connect(lambda on: self.smv.setEnabled(on and self.sm.isEnabled()))
+        for wdg in (self.nvapi, self.sm, self.smv, self.ngx, self.sr, self.rr, self.fg, self.ind, self.mh, self.gm, self.gs,
                     self.gs_f, self.gs_hdr):
             wdg.toggled.connect(self._changed)
         self.srm.currentIndexChanged.connect(lambda _: self.srr.setEnabled(self.srm.currentData() == "custom"))
@@ -317,6 +322,7 @@ class ProfilesPage(Page):
         self.game_title.setText(f"{g.name.upper()}  ·  {g.appid}")
         self._load(self.profile)
         self._set_editor_enabled(True)
+        self.sm_panel.set_appid(g.appid)
         try:
             cur_opts = self.steam.get_launch_options(g.appid) if self.steam else ""
             tool = self.steam.get_compat_tool(g.appid) if self.steam else None
@@ -331,6 +337,8 @@ class ProfilesPage(Page):
         self.proton.setCurrentIndex(max(0, idx))
         self.nvapi.setChecked(p.enable_nvapi)
         self.sm.setChecked(p.smooth_motion and self.sm.isEnabled())
+        self.smv.setChecked(p.sm_verify)
+        self.smv.setEnabled(self.sm.isChecked())
         self.ngx.setChecked(p.ngx_updater)
         self.sr.setChecked(p.dlss_sr_override)
         self.sr_p.setCurrentText(p.dlss_sr_preset)
@@ -366,6 +374,7 @@ class ProfilesPage(Page):
         p.proton = self.proton.currentData()
         p.enable_nvapi = self.nvapi.isChecked()
         p.smooth_motion = self.sm.isChecked() and self.sm.isEnabled()
+        p.sm_verify = self.smv.isChecked() and p.smooth_motion
         p.ngx_updater = self.ngx.isChecked()
         p.dlss_sr_override = self.sr.isChecked()
         p.dlss_sr_preset = self.sr_p.currentText()
@@ -402,7 +411,9 @@ class ProfilesPage(Page):
         p = self._collect()
         sm = self.ctx.feature("smooth_motion")
         mh_path = str(mangohud.profile_config_path(p.appid)) if p.appid else None
-        return p, build_launch_options(p, bool(sm and sm.status == Status.PER_GAME), mh_path)
+        from ...capabilities import smoothmotion as SMV
+        sm_log = str(SMV.log_path(p.appid)) if p.appid else None
+        return p, build_launch_options(p, bool(sm and sm.status == Status.PER_GAME), mh_path, sm_log)
 
     def _changed(self, *_):
         if self._loading or not self.profile:

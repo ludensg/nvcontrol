@@ -28,6 +28,7 @@ class TopBar(QWidget):
         self.loads: deque = deque([0.0] * 48, maxlen=48)
         self.temp: float | None = None
         self.beat = 0.0           # flashes on every telemetry sample
+        self.badge: str | None = None
         rng = random.Random(3)
         self.motes = [(rng.random(), rng.random(), 0.15 + rng.random() * 0.5, rng.random()) for _ in range(14)]
         Clock.get().tick.connect(self._tick)
@@ -35,6 +36,11 @@ class TopBar(QWidget):
     def set_info(self, gpu: str, sub: str, ok: bool):
         self.gpu, self.sub, self.ok = gpu, sub, ok
         self.update()
+
+    def set_badge(self, text: str | None):
+        if text != self.badge:
+            self.badge = text
+            self.update()
 
     def push(self, load: float | None, temp: float | None):
         self.loads.append(max(0.0, min(100.0, load or 0.0)))
@@ -102,6 +108,27 @@ class TopBar(QWidget):
         p.setFont(font("mono", 7.5, spacing=0.6))
         p.setPen(qc("muted"))
         p.drawText(QRectF(right - 520, 35, 506, 16), Qt.AlignRight | Qt.AlignVCenter, self.sub)
+        if self.badge:
+            p.setFont(font("body", 7.5, weight=theme.QFont.DemiBold, spacing=0.6))
+            tw = p.fontMetrics().horizontalAdvance(self.badge) + 34
+            fm = p.fontMetrics()
+            gpu_w = 0
+            p.save()
+            p.setFont(font("head", 13.5, weight=theme.QFont.DemiBold, spacing=0.4))
+            gpu_w = p.fontMetrics().horizontalAdvance(self.gpu)
+            p.restore()
+            bx = right - gpu_w - tw - 22
+            br = QRectF(bx, 20, tw, 24)
+            pulse = 0.5 + 0.5 * math.sin(t * 3.0)
+            p.setPen(QPen(qc("accent", 150), 1))
+            p.setBrush(qc("accent", int(22 + 18 * pulse)))
+            p.drawRoundedRect(br, 12, 12)
+            p.setPen(Qt.NoPen)
+            p.setBrush(qc("accent_hi"))
+            p.drawEllipse(QPointF(bx + 13, br.center().y()), 3 + pulse, 3 + pulse)
+            p.setPen(qc("accent_hi"))
+            p.drawText(QRectF(bx + 22, br.top(), tw - 26, br.height()), Qt.AlignLeft | Qt.AlignVCenter, self.badge)
+            _ = fm
         # status dot (beats with telemetry)
         dot = QPointF(right - 3, 43)
         col = qc("accent") if self.ok else qc("crit")

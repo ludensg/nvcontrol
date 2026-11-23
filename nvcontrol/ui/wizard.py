@@ -123,7 +123,10 @@ class SetupWizard(QDialog):
 
     def _fill_inspection(self):
         s, g, c, t = self.ctx.sysinfo, self.ctx.gpu, self.ctx.caps, self.ctx.backend.telemetry(self.ctx.gpu_index)
+        h = self.ctx.health
         rows = [
+            ("NVIDIA driver", (h.title + (f" — {h.fix[0]}" if h.fix else "")) if h else "not checked",
+             bool(h and h.ok)),
             ("GPU", f"{g.name} ({g.arch or 'unknown arch'})" if g else "No NVIDIA GPU found", bool(g)),
             ("VRAM", f"{g.vram_total_mb} MiB" if g and g.vram_total_mb else "—", bool(g)),
             ("Driver", f"{g.driver_version} · {'open' if g and g.open_kernel_module else 'proprietary'} kernel module"
@@ -158,7 +161,9 @@ class SetupWizard(QDialog):
                 it.widget().deleteLater()
         for i, (k, v, ok) in enumerate(rows):
             self._row(i, k, v, ok)
-        if not g:
+        if h and not h.ok:
+            self.verdict.setText(f"⚠ {h.title}. " + (h.fix[0] if h.fix else ""))
+        elif not g:
             self.verdict.setText("No NVIDIA GPU detected — monitoring and tuning are unavailable. "
                                  "Check the driver (chwd / nvidia-utils) and reboot.")
         elif not s.helper_installed:

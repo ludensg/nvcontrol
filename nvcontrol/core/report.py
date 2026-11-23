@@ -17,6 +17,15 @@ def build_report(ctx) -> str:
         lines.append(f"  {k:22} {getattr(s, k)}")
     lines.append(f"  {'backend':22} {ctx.backend.name} — {ctx.backend.source}")
     lines.append("")
+    h = getattr(ctx, "health", None)
+    if h:
+        lines.append("[driver health]")
+        lines.append(f"  {'state':22} {h.state.value}")
+        lines.append(f"  {'summary':22} {h.title}")
+        lines.append(f"  {'kernel module':22} {h.kernel_version}")
+        lines.append(f"  {'installed (userspace)':22} {h.userspace_version}")
+        lines.append(f"  {'nvidia-smi says':22} {h.smi_message[:300]}")
+        lines.append("")
     lines.append("[gpu]")
     if g:
         for k, v in asdict(g).items():

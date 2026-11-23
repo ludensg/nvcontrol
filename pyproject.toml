@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nvcontrol"
-version = "0.2.1"
+version = "0.2.2"
 description = "NV//CONTROL — NVIDIA control center for CachyOS / Arch Linux (KDE Plasma, Wayland & X11)"
 readme = "README.md"
 requires-python = ">=3.11"

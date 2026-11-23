@@ -8,6 +8,7 @@ from PySide6.QtCore import QMetaObject, QObject, Qt, QThread, QTimer, Signal, Sl
 from ..backend import get_backend
 from ..backend.models import Telemetry, TuningCaps
 from ..capabilities import system
+from ..capabilities.driverhealth import diagnose, mock_health
 from ..capabilities.features import build_matrix
 from ..core.config import Settings
 from ..profiles.store import ProfileStore
@@ -35,10 +36,16 @@ class AppContext(QObject):
         self.caps = TuningCaps()
         self.features = []
         self.last: Telemetry = Telemetry()
+        self.health = mock_health() if mock else None
 
     def detect_system(self):
         if not self.mock:
             self.sysinfo = system.detect()
+            self.health = diagnose()
+            (log.info if self.health.ok else log.error)(
+                "driver health: %s | %s | kernel=%s userspace=%s | nvidia-smi: %s", self.health.state.value,
+                self.health.title, self.health.kernel_version, self.health.userspace_version,
+                self.health.smi_message[:300])
         log.info("system: %s, %s, %s session, kernel %s", self.sysinfo.distro, self.sysinfo.desktop,
                  self.sysinfo.session, self.sysinfo.kernel)
         self.refresh_caps()

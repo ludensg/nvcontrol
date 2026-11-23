@@ -17,6 +17,24 @@ Crashes are caught. The traceback goes into the log and a dialog points you to i
 
 ---
 
+## Red banner: "NVIDIA driver updated — restart required"
+`pacman -Syu` updated the driver files (nvidia-utils) while the old kernel module is still loaded.
+Until you restart, nvidia-smi fails ("Driver/library version mismatch", exit code 18), NVML fails and
+Vulkan reports `vkEnumeratePhysicalDevices failed with ERROR_INITIALIZATION_FAILED`. **Restart the computer.**
+If it persists after a restart, run `sudo chwd -a` and restart again. NV//CONTROL compares
+`/proc/driver/nvidia/version` with the installed `nvidia-utils` version to detect this.
+
+## Is Smooth Motion really working?
+RTX & Gaming ▸ **Smooth Motion check** (and the same panel under each game in Game Profiles):
+* Preflight: GPU/driver version, driver running, `VK_LAYER_NV_present` installed, Vulkan working.
+* Live: while a game runs, NV//CONTROL reads `/proc/<pid>/environ` and `/proc/<pid>/maps` to see whether the
+  NVIDIA present layer is loaded *inside the game*. A green **SMOOTH MOTION** pill appears in the top bar.
+* Proof: tick **Smooth Motion verification log** in the game's profile. The layer then writes
+  `~/.local/state/nvcontrol/smoothmotion/<appid>.log` (NVPRESENT_LOG_LEVEL=4). No log means the layer never loaded.
+  Turn it off once confirmed.
+* Common reasons it's off: launch options written while Steam was open, the game runs on WineD3D/OpenGL instead of
+  DXVK/VKD3D (Vulkan), a 32-bit game on a driver older than 595, or a pending restart after a driver update.
+
 ## "No NVIDIA GPU detected"
 * `nvidia-smi` must work in a terminal. If it doesn't: `sudo chwd -a` (CachyOS) and reboot.
 * `lsmod | grep nvidia` should list `nvidia`, `nvidia_modeset`, `nvidia_drm`.

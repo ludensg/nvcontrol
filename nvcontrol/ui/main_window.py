@@ -25,6 +25,7 @@ from .pages.tools import ToolsPage
 from .pages.tuning import TuningPage
 from .veneco import KeygenDialog, Sounds, VenecoBanner, VenecoIntro
 from .chrome import NavRail, TopBar
+from .status_panels import HealthBanner
 from .text import sentence_case
 from .widgets import Backdrop, Clock, ScanlineOverlay, button, label
 
@@ -105,6 +106,11 @@ class MainWindow(QMainWindow):
         self.backdrop = Backdrop()
         bl = QVBoxLayout(self.backdrop)
         bl.setContentsMargins(0, 0, 0, 0)
+        self.health_banner = HealthBanner(self)
+        hb = self._hb = QHBoxLayout()
+        hb.setContentsMargins(34, 0, 34, 0)
+        hb.addWidget(self.health_banner)
+        bl.addLayout(hb)
         self.stack = QStackedWidget()
         self.stack.setObjectName("Workspace")
         bl.addWidget(self.stack)
@@ -128,6 +134,9 @@ class MainWindow(QMainWindow):
         self.telemetry.sample.connect(self._on_sample)
         self.telemetry.start()
         QShortcut(QKeySequence("Ctrl+Alt+V"), self, activated=self.toggle_veneco)
+        self.sm_timer = QTimer(self)
+        self.sm_timer.timeout.connect(self._scan_smooth_motion)
+        self.sm_timer.start(6000)
         self.resume = ResumeWatcher(self)
         self.resume.resumed.connect(self._on_resume)
         logs.on_crash(self._crash_dialog)
@@ -221,6 +230,8 @@ class MainWindow(QMainWindow):
 
     def _on_caps(self):
         self._chips()
+        self.health_banner.set_health(self.ctx.health)
+        self._hb.setContentsMargins(34, 0 if self.health_banner.isHidden() else 18, 34, 0)
         s = self.ctx.sysinfo
         self.rail_status.setText(
             f"{s.distro}\nkernel {s.kernel}\nhelper: {'installed' if s.helper_installed else 'missing'}\n"
@@ -244,6 +255,23 @@ class MainWindow(QMainWindow):
                     fn()
                 except Exception:  # noqa: BLE001
                     log.exception("on_resume failed in %s", type(p).__name__)
+
+    def info_dialog(self, title: str, text: str):
+        QMessageBox.information(self, title, text)
+
+    def smooth_motion_status(self, games):
+        active = [g for g in games if g.active]
+        if active:
+            self.topbar.set_badge(f"SMOOTH MOTION · {active[0].name.replace('.exe', '')}")
+        else:
+            self.topbar.set_badge(None)
+
+    def _scan_smooth_motion(self):
+        from ..capabilities import smoothmotion as SM
+        from .async_util import run_async
+        mock, drv = self.ctx.mock, (self.ctx.gpu.driver_version if self.ctx.gpu else "")
+        run_async(lambda: SM.mock_scan() if mock else SM.scan(driver_version=drv),
+                  lambda games, exc: games is not None and self.smooth_motion_status(games))
 
     def update_available(self, st):
         self.update_btn.setText(f"⬆ UPDATE AVAILABLE ({st.latest or st.behind})")

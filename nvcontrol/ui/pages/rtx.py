@@ -31,6 +31,9 @@ class RtxPage(Page):
 
     def __init__(self, ctx, main):
         super().__init__(ctx, main)
+        from ..status_panels import SmoothMotionPanel
+        self.sm_panel = SmoothMotionPanel(ctx, main)
+        self.lay.addWidget(self.sm_panel)
         self.cards = QGridLayout()
         self.cards.setSpacing(14)
         self.lay.addLayout(self.cards)
@@ -152,5 +155,6 @@ class RtxPage(Page):
         run_async(job, done)
 
     def on_show(self):
+        self.sm_panel.refresh()
         if self.ctx.settings.steam_access_granted and self.proton_list.count() == 0:
             self._scan_proton()
