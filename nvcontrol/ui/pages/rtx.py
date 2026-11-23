@@ -17,7 +17,8 @@ HOWTO = {
     "dlss_fg": "Enable Frame Generation in the game. Proton-only override: DLSS FG override.",
     "dlss_mfg": "Select 3×/4× Frame Generation in the game (RTX 50).",
     "smooth_motion": "Per game in GAME PROFILES. Driver frame generation for games without DLSS FG. "
-                     "Works on the Vulkan path (native Vulkan, DXVK, VKD3D-Proton).",
+                     "Works with DX11 and DX12 games too: on Linux, Proton runs them on Vulkan (DXVK for DX9–11, "
+                     "VKD3D-Proton for DX12). Only OpenGL games (or Proton forced to WineD3D) are left out.",
     "reflex": "Enable Reflex in the game's settings. On Proton, DXVK-NVAPI provides it; set "
               "PROTON_ENABLE_NVAPI=1 in the profile if the game doesn't show the option.",
     "shader_cache": "Per game: raise the NVIDIA shader disk cache for large titles to reduce stutter.",

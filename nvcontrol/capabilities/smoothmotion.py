@@ -164,11 +164,13 @@ def judge(g: RunningGame, driver: tuple[int, ...]) -> RunningGame:
         return g
     g.verdict = "Smooth Motion was requested but is NOT running"
     if g.wined3d and not g.dxvk:
-        g.reasons.append("The game renders through WineD3D (OpenGL). Smooth Motion only works on Vulkan: remove "
+        g.reasons.append("The game renders through WineD3D (OpenGL). Smooth Motion needs the Vulkan path, which is what "
+                         "DXVK/VKD3D give DX11/DX12 games under Proton: remove "
                          "PROTON_USE_WINED3D and use DXVK/VKD3D.")
     elif not g.vulkan:
         g.reasons.append("The game isn't using Vulkan (native OpenGL game, or it hasn't started rendering yet). "
-                         "Smooth Motion only supports Vulkan.")
+                         "Smooth Motion needs Vulkan. DX11/DX12 games under Proton qualify (DXVK/VKD3D translate them to Vulkan); "
+                         "native OpenGL games don't.")
     if g.is32 and driver and driver < ALL_ARCH_DRIVER:
         g.reasons.append("This is a 32-bit game. Your driver only supports Smooth Motion for 64-bit games "
                          "(fixed in driver 595+).")

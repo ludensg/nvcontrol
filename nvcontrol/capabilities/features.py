@@ -213,7 +213,7 @@ def build_matrix(sysinfo: SystemInfo, gpu: GpuInfo | None, caps: TuningCaps,
                 "In-game setting", "RTX 50 series", scope="per-game"))
     sm_status, sm_detail = smooth_motion_status(gpu)
     add(Feature("smooth_motion", "NVIDIA Smooth Motion", "RTX", sm_status, "NVPRESENT_ENABLE_SMOOTH_MOTION=1",
-                "RTX 50 (575+) / RTX 40 (580.82.07+), Vulkan rendering path",
+                "RTX 50 (575+) / RTX 40 (580.82.07+); Vulkan games and DX11/DX12 games under Proton",
                 sm_detail + " Not for games that already use DLSS Frame Generation.", "per-game"))
     add(Feature("reflex", "NVIDIA Reflex", "RTX", Status.PER_GAME if gpu else Status.UNSUPPORTED,
                 "In-game setting (DXVK-NVAPI + VK_NV_low_latency2)",
