@@ -18,6 +18,7 @@ class GameProfile:
     # NVIDIA / Proton
     enable_nvapi: bool = False            # PROTON_ENABLE_NVAPI=1
     smooth_motion: bool = False           # NVPRESENT_ENABLE_SMOOTH_MOTION=1
+    sm_overlay_compat: bool = False       # NVPRESENT_QUEUE_FAMILY=1 (present from graphics queue; for overlays)
     sm_verify: bool = False               # NVPRESENT_LOG_LEVEL=4 + NVPRESENT_LOG_FILE (proves the layer loaded)
     ngx_updater: bool = False             # PROTON_ENABLE_NGX_UPDATER=1
     dlss_sr_override: bool = False
@@ -125,9 +126,14 @@ def build_launch_options(p: GameProfile, smooth_motion_allowed: bool,
     if p.smooth_motion:
         if smooth_motion_allowed:
             env["NVPRESENT_ENABLE_SMOOTH_MOTION"] = "1"
+            if p.sm_overlay_compat:
+                env["NVPRESENT_QUEUE_FAMILY"] = "1"
             if p.sm_verify and sm_log_path:
                 env["NVPRESENT_LOG_LEVEL"] = "4"
                 env["NVPRESENT_LOG_FILE"] = sm_log_path
+            if p.mangohud and not p.sm_overlay_compat:
+                warn.append("MangoHud with Smooth Motion: if you see crashes or no effect, tick 'Overlay "
+                            "compatibility'. Note FPS counters show the base frame rate, not generated frames.")
             if p.dlss_fg_override:
                 warn.append("Smooth Motion and DLSS Frame Generation compete — NVIDIA advises not to use both.")
         else:

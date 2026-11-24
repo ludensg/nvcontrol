@@ -165,7 +165,8 @@ class MainWindow(QMainWindow):
         self.rail.animate = s.animations
         self.backdrop.textured = s.extra.get("texture", True)
         self.scan.set_active(s.scanlines)
-        self.backdrop.update()
+        self.backdrop.set_ambient(s.animations and s.extra.get("dust", True))
+        self.backdrop.invalidate()
         for p in self.pages:
             for g in getattr(p, "__dict__", {}).values():
                 if hasattr(g, "animate"):

@@ -5,9 +5,9 @@ import math
 import random
 from collections import deque
 
-from PySide6.QtCore import (QEasingCurve, QObject, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation,
+from PySide6.QtCore import (QEasingCurve, QEvent, QObject, QPoint, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation,
                             Signal)
-from PySide6.QtGui import (QBrush, QColor, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap,
+from PySide6.QtGui import (QBrush, QColor, QImage, QRegion, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap,
                            QPolygonF, QRadialGradient)
 from PySide6.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout,
                                QWidget)
@@ -105,37 +105,257 @@ def rounded(r: QRectF, rad: float = RADIUS) -> QPainterPath:
 
 # =============================================================================== backdrop
 class Backdrop(QWidget):
-    """Workspace background: soft green bloom, faint dot grid, film grain."""
+    """Workspace background.
+
+    Static layer (bloom, dot grid, film grain) is cached in a pixmap. On top of it an
+    optional ambient layer in the spirit of the PS3 XMB: slow translucent ribbons and
+    soft sparkles drifting along them. Everything stays *behind* the pages.
+
+    Cost control: sparkles tick at ~15 fps and repaint only the small rectangles around
+    themselves; the ribbons repaint their band ~5x/s (they move well under 1 px per frame).
+    """
+
+    N_SPARKS = 46
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.textured = True
+        self.ambient = False
         self.setAttribute(Qt.WA_StyledBackground, False)
+        self._cache: QPixmap | None = None
+        self._cache_key = None
+        self._t = 0.0
+        self._frame = 0
+        self._rng = random.Random(3)
+        self._sparks: list[list[float]] = []
+        self._sprites: dict[tuple, QPixmap] = {}
+        self._occ: QRegion | None = None
+        Clock.get().tick.connect(self._tick)
 
+    # ------------------------------------------------------------ static layer
+    def _static(self) -> QPixmap:
+        key = (self.width(), self.height(), self.textured, theme.MODE.get("name"))
+        if self._cache is not None and self._cache_key == key:
+            return self._cache
+        pm = QPixmap(max(1, self.width()), max(1, self.height()))
+        r = QRectF(pm.rect())
+        p = QPainter(pm)
+        p.fillRect(r, qc("bg"))
+        if not theme.is_veneco():
+            g = QRadialGradient(QPointF(r.right() * 0.92, -r.height() * 0.15), r.width() * 0.75)
+            g.setColorAt(0, qc("accent", 26))
+            g.setColorAt(0.5, qc("accent", 6))
+            g.setColorAt(1, qc("accent", 0))
+            p.fillRect(r, g)
+            g2 = QRadialGradient(QPointF(r.width() * 0.05, r.height() * 1.1), r.width() * 0.6)
+            g2.setColorAt(0, QColor(108, 200, 218, 10))
+            g2.setColorAt(1, QColor(108, 200, 218, 0))
+            p.fillRect(r, g2)
+            if self.textured:
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(255, 255, 255, 9))
+                step = 24
+                for y in range(12, int(r.height()), step):
+                    for x in range(12, int(r.width()), step):
+                        p.drawRect(QRectF(x, y, 1, 1))
+                p.drawTiledPixmap(r.toRect(), noise())
+        p.end()
+        self._cache, self._cache_key = pm, key
+        return pm
+
+    def invalidate(self):
+        self._cache = None
+        self._ribbon_pm = None
+        self._sprites.clear()
+        self.update()
+
+    # ------------------------------------------------------------ ambient geometry
+    def set_ambient(self, on: bool):
+        self.ambient = on
+        if on and not self._sparks:
+            self._sparks = [self._spawn(fresh=True) for _ in range(self.N_SPARKS)]
+        self.update()
+
+    def _wave_y(self, x: float, layer: int, t: float) -> float:
+        h, w = self.height(), max(1, self.width())
+        cy = h * (0.60 + 0.07 * layer)
+        u = x / w * math.tau
+        amp = h * (0.075 - 0.015 * layer)
+        return (cy + amp * math.sin(u * (0.9 + 0.25 * layer) + t * (0.11 + 0.04 * layer) + layer * 1.7)
+                + amp * 0.45 * math.sin(u * (2.1 - 0.3 * layer) - t * (0.07 + 0.03 * layer) + layer))
+
+    def _band(self) -> QRectF:
+        h = self.height()
+        return QRectF(0, h * 0.40, self.width(), h * 0.48)
+
+    def _spawn(self, fresh: bool = False) -> list[float]:
+        r = self._rng
+        w = max(1, self.width())
+        depth = r.random()
+        return [r.uniform(0, w) if fresh else w + r.uniform(0, 40),   # x
+                r.gauss(0, 1) * 34 * (0.5 + depth),                     # offset from ribbon
+                r.choice((0, 0, 1, 2)),                                 # ribbon it follows
+                r.uniform(5, 16) * (0.5 + depth),                       # speed (drifts left)
+                0.8 + depth * 2.6,                                      # size
+                r.uniform(0, 1) if fresh else 0.0,                      # life 0..1
+                1 / r.uniform(9, 20),                                   # life rate /s
+                r.uniform(0, math.tau),                                 # twinkle phase
+                depth]
+
+    def _spark_pos(self, s, t) -> QPointF:
+        bob = math.sin(t * 0.6 + s[7]) * 5
+        return QPointF(s[0], self._wave_y(s[0], int(s[2]), t) + s[1] + bob)
+
+    def _spark_rect(self, s, t) -> QRectF:
+        c = self._spark_pos(s, t)
+        rad = s[4] * 6 + 5
+        return QRectF(c.x() - rad, c.y() - rad, rad * 2, rad * 2)
+
+    def _sprite(self, color: QColor, size: float) -> QPixmap:
+        key = (color.rgba(), round(size, 1))
+        pm = self._sprites.get(key)
+        if pm is None:
+            rad = int(size * 6 + 4)
+            pm = QPixmap(rad * 2, rad * 2)
+            pm.fill(Qt.transparent)
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.Antialiasing)
+            g = QRadialGradient(QPointF(rad, rad), rad)
+            for stop, a in ((0.0, 230), (0.12, 150), (0.3, 46), (1.0, 0)):
+                c = QColor(color)
+                c.setAlpha(a)
+                g.setColorAt(stop, c)
+            p.setPen(Qt.NoPen)
+            p.setBrush(g)
+            p.drawEllipse(QPointF(rad, rad), rad, rad)
+            p.setBrush(QColor(255, 255, 255, 235))
+            p.drawEllipse(QPointF(rad, rad), size * 0.45, size * 0.45)
+            p.end()
+            if len(self._sprites) > 96:
+                self._sprites.clear()
+            self._sprites[key] = pm
+        return pm
+
+    # ------------------------------------------------------------ animation
+    def _tick(self, t: float):
+        if not self.ambient or not self.isVisible():
+            return
+        win = self.window()
+        if win is not None and win.isMinimized():
+            return
+        focused = win is None or win.isActiveWindow()
+        self._frame += 1
+        every = 2 if focused else 4             # ~15 fps focused, ~7 fps unfocused: motion is <1 px/frame
+        if self._frame % every:
+            return
+        dt = 0.033 * every
+        old_t, self._t = self._t, t
+        w = self.width()
+        if self._frame % 15 == 0 or self._occ is None:
+            self._occ = self._occluders()
+        occ = self._occ
+        dirty = QRegion()
+        for s in self._sparks:
+            old = self._spark_rect(s, old_t)
+            s[0] -= s[3] * dt
+            s[5] += s[6] * dt
+            if s[5] >= 1 or s[0] < -30:
+                s[:] = self._spawn()
+                s[0] = self._rng.uniform(0, w)
+            dirty += QRegion(old.united(self._spark_rect(s, t)).toAlignedRect())
+        if self._frame % (every * 3) == 0:      # ribbons: ~5 fps, they barely move
+            self._ribbon_pm = None
+            dirty += QRegion(self._band().toAlignedRect())
+        # Cards are ~92% opaque: whatever moves behind them is invisible, so never
+        # repaint there. Only the gaps between cards get redrawn.
+        dirty -= occ
+        if not dirty.isEmpty():
+            self.update(dirty)
+
+    def _occluders(self) -> QRegion:
+        reg = QRegion()
+        for panel in self.findChildren(HudPanel):
+            if panel.isVisible() and panel.width() > 40:
+                vis = panel.visibleRegion()
+                if not vis.isEmpty():
+                    reg += vis.translated(panel.mapTo(self, QPoint(0, 0))).boundingRect().adjusted(2, 2, -2, -2)
+        return reg
+
+    # ------------------------------------------------------------ paint
     def paintEvent(self, e):
         p = QPainter(self)
-        r = QRectF(self.rect())
-        p.fillRect(r, qc("bg"))
-        if theme.is_veneco():
+        clip = QRectF(e.rect())
+        p.drawPixmap(e.rect(), self._static(), e.rect())
+        if not self.ambient:
+            p.end()
             return
-        g = QRadialGradient(QPointF(r.right() * 0.92, -r.height() * 0.15), r.width() * 0.75)
-        g.setColorAt(0, qc("accent", 26))
-        g.setColorAt(0.5, qc("accent", 6))
-        g.setColorAt(1, qc("accent", 0))
-        p.fillRect(r, g)
-        g2 = QRadialGradient(QPointF(r.width() * 0.05, r.height() * 1.1), r.width() * 0.6)
-        g2.setColorAt(0, QColor(108, 200, 218, 10))
-        g2.setColorAt(1, QColor(108, 200, 218, 0))
-        p.fillRect(r, g2)
-        if self.textured:
-            p.setPen(Qt.NoPen)
-            p.setBrush(QColor(255, 255, 255, 9))
-            step = 24
-            for y in range(12, int(r.height()), step):
-                for x in range(12, int(r.width()), step):
-                    p.drawRect(QRectF(x, y, 1, 1))
-            p.drawTiledPixmap(r.toRect(), noise())
+        t = self._t
+        p.setRenderHint(QPainter.Antialiasing)
+        band = self._band()
+        if clip.intersects(band):
+            pm = self._ribbons_pm()
+            p.drawPixmap(band.topLeft(), pm)
+        p.setCompositionMode(QPainter.CompositionMode_Plus)
+        base = qc("accent_hi")
+        cool = QColor(200, 255, 170) if not theme.is_veneco() else QColor("#FFD000")
+        for s in self._sparks:
+            rr = self._spark_rect(s, t)
+            if not rr.intersects(clip):
+                continue
+            life = math.sin(math.pi * min(1.0, max(0.0, s[5])))          # fade in, fade out
+            tw = 0.55 + 0.45 * math.sin(t * 1.3 + s[7] * 3)
+            p.setOpacity(life * tw * (0.25 + 0.55 * s[8]))
+            pm = self._sprite(cool if s[8] > 0.8 else base, round(s[4], 1))
+            c = rr.center()
+            p.drawPixmap(QPointF(c.x() - pm.width() / 2, c.y() - pm.height() / 2), pm)
         p.end()
+
+    def _ribbons_pm(self) -> QPixmap:
+        band = self._band().toAlignedRect()
+        pm = getattr(self, "_ribbon_pm", None)
+        if pm is None or pm.size() != band.size():
+            pm = QPixmap(max(1, band.width()), max(1, band.height()))
+            pm.fill(Qt.transparent)
+            rp = QPainter(pm)
+            rp.setRenderHint(QPainter.Antialiasing)
+            rp.translate(0, -band.top())
+            self._paint_ribbons(rp, self._t, QRectF(band))
+            rp.end()
+            self._ribbon_pm = pm
+        return pm
+
+    def _paint_ribbons(self, p: QPainter, t: float, region: QRectF):
+        w = self.width()
+        x0, x1 = max(0.0, region.left() - 8), min(float(w), region.right() + 8)
+        steps = max(8, int((x1 - x0) / 14))
+        acc = qc("accent")
+        for layer in (2, 1, 0):
+            top = QPainterPath()
+            bot = []
+            spread = self.height() * (0.018 + 0.012 * layer)
+            for i in range(steps + 1):
+                x = x0 + (x1 - x0) * i / steps
+                y = self._wave_y(x, layer, t)
+                th = spread * (0.55 + 0.45 * math.sin(x / max(1, w) * 5.0 + t * 0.2 + layer))
+                (top.moveTo if i == 0 else top.lineTo)(x, y - th)
+                bot.append(QPointF(x, y + th))
+            edge = QPainterPath(top)
+            for pt in reversed(bot):
+                top.lineTo(pt)
+            top.closeSubpath()
+            tint = QColor(acc).lighter(135)
+            fill = QLinearGradient(0, 0, w, 0)            # fade in from the left, out at the right
+            for stop, a in ((0.0, 0), (0.25, 13 - layer * 3), (0.7, 17 - layer * 4), (1.0, 2)):
+                c = QColor(tint)
+                c.setAlpha(max(0, a))
+                fill.setColorAt(stop, c)
+            p.fillPath(top, QBrush(fill))
+            line = QLinearGradient(0, 0, w, 0)
+            for stop, a in ((0.0, 0), (0.35, 34 - layer * 8), (0.8, 26 - layer * 6), (1.0, 0)):
+                line.setColorAt(stop, QColor(255, 255, 255, max(0, a)))
+            p.setPen(QPen(QBrush(line), 1.1))
+            p.setBrush(Qt.NoBrush)
+            p.drawPath(edge)
 
 
 # =============================================================================== panels
@@ -345,14 +565,23 @@ class RadialGauge(QWidget):
         r = QRectF((self.width() - side) / 2, (self.height() - side) / 2 + 4, side, side)
         cx, cy = r.center().x(), r.center().y()
         start, span = 225, -270
-        # minor ticks
-        for i in range(55):
-            a = math.radians(start + span * i / 54)
-            major = i % 9 == 0
-            r1, r2 = side / 2 - 1, side / 2 + (5 if major else 2)
-            p.setPen(QPen(qc("border_hi") if major else qc("border"), 1))
-            p.drawLine(QPointF(cx + r1 * math.cos(a), cy - r1 * math.sin(a)),
-                       QPointF(cx + r2 * math.cos(a), cy - r2 * math.sin(a)))
+        # tick ring is static: cache it per size/theme
+        key = (self.width(), self.height(), theme.MODE.get("name"))
+        if getattr(self, "_ticks_key", None) != key:
+            pm = QPixmap(max(1, self.width()), max(1, self.height()))
+            pm.fill(Qt.transparent)
+            tp = QPainter(pm)
+            tp.setRenderHint(QPainter.Antialiasing)
+            for i in range(55):
+                a = math.radians(start + span * i / 54)
+                major = i % 9 == 0
+                r1, r2 = side / 2 - 1, side / 2 + (5 if major else 2)
+                tp.setPen(QPen(qc("border_hi") if major else qc("border"), 1))
+                tp.drawLine(QPointF(cx + r1 * math.cos(a), cy - r1 * math.sin(a)),
+                            QPointF(cx + r2 * math.cos(a), cy - r2 * math.sin(a)))
+            tp.end()
+            self._ticks_pm, self._ticks_key = pm, key
+        p.drawPixmap(0, 0, self._ticks_pm)
         inner = r.adjusted(9, 9, -9, -9)
         p.setPen(QPen(qc("border"), 6, Qt.SolidLine, Qt.RoundCap))
         p.drawArc(inner, start * 16, span * 16)
@@ -553,6 +782,21 @@ class LiveGraph(QWidget):
 
 
 # =============================================================================== legacy overlay (kept for API)
+class _FollowParent(QObject):
+    """Keeps an overlay widget sized to its parent (the parent's layout resizes it late)."""
+
+    def __init__(self, overlay: QWidget):
+        super().__init__(overlay)
+        self.overlay = overlay
+        overlay.parentWidget().installEventFilter(self)
+        overlay.setGeometry(overlay.parentWidget().rect())
+
+    def eventFilter(self, obj, ev):
+        if ev.type() == QEvent.Resize:
+            self.overlay.setGeometry(obj.rect())
+        return False
+
+
 class ScanlineOverlay(QWidget):
     """Very faint CRT lines — optional, off by default."""
 
@@ -561,6 +805,7 @@ class ScanlineOverlay(QWidget):
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WA_NoSystemBackground)
         self.enabled_lines = False
+        self._follow = _FollowParent(self)
 
     def set_active(self, lines: bool, animate: bool = False):
         self.enabled_lines = lines

@@ -138,6 +138,7 @@ class ProfilesPage(Page):
         f.addRow("Proton version", self.proton)
         self.nvapi = QCheckBox("PROTON_ENABLE_NVAPI=1 (needed for DLSS/Reflex in some titles)")
         self.sm = QCheckBox("NVIDIA Smooth Motion (NVPRESENT_ENABLE_SMOOTH_MOTION=1)")
+        self.smq = QCheckBox("Smooth Motion overlay compatibility (NVPRESENT_QUEUE_FAMILY=1; for MangoHud/Steam overlay)")
         self.smv = QCheckBox("Smooth Motion verification log (proves it's running; turn off afterwards)")
         self.ngx = QCheckBox("Fetch newer DLSS via NGX updater (PROTON_ENABLE_NGX_UPDATER=1)")
         self.sr = QCheckBox("Override DLSS Super Resolution preset")
@@ -159,7 +160,7 @@ class ProfilesPage(Page):
         self.cache.setRange(0, 64)
         self.cache.setSuffix(" GB")
         self.cache.setSpecialValueText("driver default")
-        for row in (self.nvapi, self.sm, self.smv, self.ngx):
+        for row in (self.nvapi, self.sm, self.smq, self.smv, self.ngx):
             f.addRow("", row)
         f.addRow("", self.sr)
         f.addRow("SR preset", self.sr_p)
@@ -188,7 +189,11 @@ class ProfilesPage(Page):
         self.gpu_prof.addItems(["", "Balanced", "Maximum Performance", "Quiet Operation", "Power Efficient", "Custom"])
         f.addRow("", self.mh)
         f.addRow("Overlay preset", self.mh_p)
-        f.addRow("FPS limit", self.fps)
+        fr = QHBoxLayout()
+        fr.addWidget(self.fps, 1)
+        fr.addWidget(button("Half refresh (for Smooth Motion)", None, self._half_refresh,
+                            "Caps the game at half your refresh rate so Smooth Motion can fill in the other half."))
+        f.addRow("FPS limit", fr)
         f.addRow("", self.gm)
         f.addRow("GPU profile (note)", self.gpu_prof)
         f.addRow("", label("The GPU profile is a reminder only: tuning is global. LACT can switch its own profiles "
@@ -240,8 +245,9 @@ class ProfilesPage(Page):
         f.addRow("Notes", self.notes)
         self.tabs.addTab(w, "ADVANCED")
 
-        self.sm.toggled.connect(lambda on: self.smv.setEnabled(on and self.sm.isEnabled()))
-        for wdg in (self.nvapi, self.sm, self.smv, self.ngx, self.sr, self.rr, self.fg, self.ind, self.mh, self.gm, self.gs,
+        self.sm.toggled.connect(lambda on: (self.smv.setEnabled(on and self.sm.isEnabled()),
+                                            self.smq.setEnabled(on and self.sm.isEnabled())))
+        for wdg in (self.nvapi, self.sm, self.smq, self.smv, self.ngx, self.sr, self.rr, self.fg, self.ind, self.mh, self.gm, self.gs,
                     self.gs_f, self.gs_hdr):
             wdg.toggled.connect(self._changed)
         self.srm.currentIndexChanged.connect(lambda _: self.srr.setEnabled(self.srm.currentData() == "custom"))
@@ -252,6 +258,13 @@ class ProfilesPage(Page):
             wdg.valueChanged.connect(self._changed)
         self.env.textChanged.connect(self._changed)
         self.args.textChanged.connect(self._changed)
+
+    def _half_refresh(self):
+        rates = [o.current_mode.refresh for o in self.ctx.sysinfo.displays if o.enabled and o.current_mode]
+        if not rates:
+            self.error("Half refresh", "Couldn't read your monitor's refresh rate.")
+            return
+        self.fps.setValue(int(max(rates) // 2))
 
     def _set_editor_enabled(self, on: bool):
         self.tabs.setEnabled(on)
@@ -339,6 +352,8 @@ class ProfilesPage(Page):
         self.sm.setChecked(p.smooth_motion and self.sm.isEnabled())
         self.smv.setChecked(p.sm_verify)
         self.smv.setEnabled(self.sm.isChecked())
+        self.smq.setChecked(p.sm_overlay_compat)
+        self.smq.setEnabled(self.sm.isChecked())
         self.ngx.setChecked(p.ngx_updater)
         self.sr.setChecked(p.dlss_sr_override)
         self.sr_p.setCurrentText(p.dlss_sr_preset)
@@ -375,6 +390,7 @@ class ProfilesPage(Page):
         p.enable_nvapi = self.nvapi.isChecked()
         p.smooth_motion = self.sm.isChecked() and self.sm.isEnabled()
         p.sm_verify = self.smv.isChecked() and p.smooth_motion
+        p.sm_overlay_compat = self.smq.isChecked() and p.smooth_motion
         p.ngx_updater = self.ngx.isChecked()
         p.dlss_sr_override = self.sr.isChecked()
         p.dlss_sr_preset = self.sr_p.currentText()

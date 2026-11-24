@@ -166,6 +166,12 @@ def judge(g: RunningGame, driver: tuple[int, ...]) -> RunningGame:
     if g.layer_loaded:
         g.active = True
         g.verdict = "Smooth Motion is ACTIVE (NVIDIA present layer loaded in the game)"
+        g.reasons += [
+            "Don't see a difference? FPS counters (in-game, MangoHud) show the BASE frame rate, not the generated "
+            "frames, and may even drop because frame generation costs GPU time.",
+            "If the game already reaches your monitor's refresh rate, Smooth Motion has nothing to add. Cap the "
+            "game at half your refresh rate (Game Profiles ▸ Half refresh), turn V-Sync off in-game, and compare.",
+            "Overlays (MangoHud, Steam overlay) can interfere: try 'Overlay compatibility' in the profile."]
         if g.wined3d:
             g.reasons.append("WineD3D is also loaded; make sure the game renders through DXVK/VKD3D.")
         return g

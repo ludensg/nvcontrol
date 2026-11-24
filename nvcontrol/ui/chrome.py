@@ -6,7 +6,7 @@ import random
 from collections import deque
 
 from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, Qt, QVariantAnimation, Signal
-from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
+from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
 from PySide6.QtWidgets import QAbstractButton, QSizePolicy, QVBoxLayout, QWidget
 
 from .. import TAGLINE
@@ -52,22 +52,35 @@ class TopBar(QWidget):
         self.beat = max(0.0, self.beat - 0.06)
         self.update()
 
+    def _base(self) -> QPixmap:
+        """Gradient + brushed texture + grain: static, so drawn once per size/theme."""
+        key = (self.width(), self.height(), theme.MODE.get("name"))
+        if getattr(self, "_base_key", None) != key:
+            pm = QPixmap(max(1, self.width()), max(1, self.height()))
+            r = QRectF(pm.rect())
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.Antialiasing)
+            bg = QLinearGradient(r.topLeft(), r.bottomLeft())
+            bg.setColorAt(0, qc("bg2"))
+            bg.setColorAt(1, qc("bg"))
+            p.fillRect(r, bg)
+            if not theme.is_veneco():
+                p.setPen(QPen(QColor(255, 255, 255, 5), 1))
+                for x in range(-80, int(r.width()) + 80, 7):
+                    p.drawLine(QPointF(x, r.bottom()), QPointF(x + 60, r.top()))
+                p.drawTiledPixmap(r.toRect(), noise())
+            p.end()
+            self._base_pm, self._base_key = pm, key
+        return self._base_pm
+
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(self.rect())
         clock = Clock.get()
         t = clock.t if clock.running else 0.0
-        bg = QLinearGradient(r.topLeft(), r.bottomLeft())
-        bg.setColorAt(0, qc("bg2"))
-        bg.setColorAt(1, qc("bg"))
-        p.fillRect(r, bg)
+        p.drawPixmap(0, 0, self._base())
         if not theme.is_veneco():
-            # brushed diagonal texture
-            p.setPen(QPen(QColor(255, 255, 255, 5), 1))
-            for x in range(-80, int(r.width()) + 80, 7):
-                p.drawLine(QPointF(x, r.bottom()), QPointF(x + 60, r.top()))
-            p.drawTiledPixmap(r.toRect(), noise())
             # drifting light sheen
             if clock.running:
                 sx = ((t * 0.045) % 1.6 - 0.3) * r.width()

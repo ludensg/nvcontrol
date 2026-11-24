@@ -127,3 +127,17 @@ def test_bundled_fonts_load(app):
     theme.init_fonts()
     assert theme.FONTS["head"] == "Barlow Semi Condensed"
     assert theme.FONTS["body"] == "Inter" and theme.FONTS["mono"] == "JetBrains Mono"
+
+
+def test_backdrop_ambient_layer(app):
+    from nvcontrol.ui.widgets import Backdrop
+    b = Backdrop(); b.resize(900, 600); b.show()
+    b.set_ambient(True)
+    assert len(b._sparks) == Backdrop.N_SPARKS
+    x0 = [s[0] for s in b._sparks]
+    for i in range(30):
+        b._tick(i * 0.033)
+    assert any(abs(s[0] - a) > 0.1 for s, a in zip(b._sparks, x0))
+    b.repaint()
+    b.set_ambient(False)
+    b.repaint()

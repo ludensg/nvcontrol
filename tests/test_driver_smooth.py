@@ -99,3 +99,11 @@ def test_only_games_are_candidates():
     assert not SM.is_candidate(None, env_on=True, layer_loaded=None, vulkan=True)   # random Vulkan app
     assert SM.is_candidate("1091500", env_on=True, layer_loaded=False, vulkan=True)  # Steam game
     assert SM.is_candidate(None, env_on=True, layer_loaded=True, vulkan=True)        # layer really running
+
+
+def test_overlay_compat_and_active_tips():
+    from nvcontrol.profiles.game_profile import GameProfile, build_launch_options
+    o = build_launch_options(GameProfile(appid="570", smooth_motion=True, sm_overlay_compat=True), True).options
+    assert "NVPRESENT_QUEUE_FAMILY=1" in o
+    g = SM.judge(SM.RunningGame(1, "dota2", "570", True, True, True, False, False, False), (620,))
+    assert g.active and any("BASE frame rate" in r for r in g.reasons)
